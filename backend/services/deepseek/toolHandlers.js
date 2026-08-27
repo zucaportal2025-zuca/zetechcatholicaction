@@ -4,6 +4,14 @@ const prisma = new PrismaClient();
 const axios = require("axios");
 const { createAndSendNotification } = require("./notificationService");
 
+
+// ================== DOMAIN CONFIGURATION ==================
+const DOMAIN = process.env.DOMAIN || 'www.zetechcatholicaction.com';
+const PROTOCOL = process.env.NODE_ENV === 'production' ? 'https' : 'http';
+const FRONTEND_URL = `${PROTOCOL}://${DOMAIN}`;
+
+console.log(`🌐 Tool handler Frontend URL: ${FRONTEND_URL}`);
+
 /**
  * Execute a tool call and return the result
  * @param {string} toolName - Name of the tool to execute
@@ -340,57 +348,135 @@ async function executeToolCall(toolName, args, context) {
 
       // ==================== MASS & LITURGY ====================
             // ==================== MASS & LITURGY ====================
-      case "get_upcoming_masses":
-      case "show_masses":
-      case "get_masses":
-      case "list_masses":
-      case "view_masses":
-      case "next_mass":
-      case "mass_times": {
-        const now = new Date();
-        const limit = args.limit || 5;
+     case "get_upcoming_masses":
+case "show_masses":
+case "get_masses":
+case "list_masses":
+case "view_masses":
+case "next_mass":
+case "mass_times": {
+  const now = new Date();
+  const limit = args.limit || 5;
 
-        // Get Mass Programs
-        const massPrograms = await prisma.massProgram.findMany({
-          where: { date: { gte: now } },
-          include: { songs: { include: { song: true } } },
-          orderBy: { date: "asc" },
-          take: limit
-        });
+  // Get Mass Programs
+  const massPrograms = await prisma.massProgram.findMany({
+    where: { date: { gte: now } },
+    include: { songs: { include: { song: true } } },
+    orderBy: { date: "asc" },
+    take: limit
+  });
 
-        // Get Schedule Events (semester schedule)
-        const scheduleEvents = await prisma.scheduleEvent.findMany({
-          where: {
-            eventDate: { gte: now },
-            schedule: { isPublished: true }
-          },
-          include: { schedule: { select: { title: true } } },
-          orderBy: { eventDate: "asc" },
-          take: limit
-        });
+  // Get Schedule Events
+  const scheduleEvents = await prisma.scheduleEvent.findMany({
+    where: {
+      eventDate: { gte: now },
+      schedule: { isPublished: true }
+    },
+    include: { schedule: { select: { title: true } } },
+    orderBy: { eventDate: "asc" },
+    take: 8  // Get up to 8 events
+  });
 
-        return {
-          massPrograms: massPrograms.map(m => ({
-            type: "mass",
-            date: m.date,
-            venue: m.venue,
-            songs: m.songs?.map(s => s.song?.title) || []
-          })),
-          scheduleEvents: scheduleEvents.map(e => ({
-            type: "event",
-            title: e.title,
-            date: e.eventDate,
-            time: e.eventTime || "TBD",
-            location: e.location || "TBD",
-            schedule: e.schedule?.title
-          })),
-          nextEvent: scheduleEvents[0] ? {
-            title: scheduleEvents[0].title,
-            date: scheduleEvents[0].eventDate,
-            time: scheduleEvents[0].eventTime
-          } : null
-        };
-      }
+  // ========== BUILD MESSAGE ==========
+  let message = `📅 *UPCOMING EVENTS*\n\n`;
+  
+  if (massPrograms.length === 0 && scheduleEvents.length === 0) {
+    message += `No upcoming events found in the system.`;
+    return { 
+      message,
+      massPrograms: [],
+      scheduleEvents: [],
+      nextEvent: null
+    };
+  }
+
+  // Combine all events
+  const allEvents = [];
+  
+  for (const e of scheduleEvents) {
+    allEvents.push({
+      type: "event",
+      title: e.title,
+      date: e.eventDate,
+      time: e.eventTime || "TBD",
+      location: e.location || "TBD",
+      schedule: e.schedule?.title
+    });
+  }
+  
+  for (const m of massPrograms) {
+    allEvents.push({
+      type: "mass",
+      title: m.venue || "Mass",
+      date: m.date,
+      time: "TBD",
+      location: m.venue || "TBD",
+      songs: m.songs?.map(s => s.song?.title) || []
+    });
+  }
+
+  // Sort by date
+  allEvents.sort((a, b) => new Date(a.date) - new Date(b.date));
+
+  // Show up to 6 events (WhatsApp friendly)
+  const showEvents = allEvents.slice(0, 6);
+
+  for (const e of showEvents) {
+    const date = new Date(e.date).toLocaleDateString('en-KE', { 
+      day: 'numeric', 
+      month: 'short', 
+      year: 'numeric'
+    });
+    
+    // ✅ SHOW FULL TITLE (NO TRUNCATION)
+    const title = e.title || 'Event';
+    const time = e.time || 'TBD';
+    const location = e.location && e.location !== 'TBD' ? e.location : '';
+    const emoji = e.type === 'mass' ? '⛪' : '📌';
+    
+    message += `${emoji} *${title}*\n`;
+    message += `   📅 ${date} | ⏰ ${time}\n`;
+    if (location) {
+      message += `   📍 ${location}\n`;
+    }
+    message += `\n`;
+  }
+
+  if (allEvents.length > 6) {
+    message += `... and ${allEvents.length - 6} more\n\n`;
+  }
+
+  // ✅ FIXED LINKS (no double http://)
+  message += `📱 *Full schedule:* ${FRONTEND_URL}/schedules`;
+  message += `\n📌 *More info:* ${FRONTEND_URL}/mass-programs`;
+
+  return { 
+    message,  // ← WhatsApp will display this
+    massPrograms: massPrograms.map(m => ({
+      type: "mass",
+      date: m.date,
+      venue: m.venue,
+      songs: m.songs?.map(s => s.song?.title) || []
+    })),
+    scheduleEvents: scheduleEvents.map(e => ({
+      type: "event",
+      title: e.title,
+      date: e.eventDate,
+      time: e.eventTime || "TBD",
+      location: e.location || "TBD",
+      schedule: e.schedule?.title
+    })),
+    nextEvent: scheduleEvents[0] ? {
+      title: scheduleEvents[0].title,
+      date: scheduleEvents[0].eventDate,
+      time: scheduleEvents[0].eventTime
+    } : (massPrograms[0] ? {
+      title: massPrograms[0].venue || "Mass",
+      date: massPrograms[0].date,
+      time: "TBD"
+    } : null)
+  };
+}
 
       case "get_todays_readings": {
         const today = new Date();
@@ -629,6 +715,62 @@ async function executeToolCall(toolName, args, context) {
         });
         
         return { success: true, message: "Message posted to community chat!" };
+      }
+
+
+            // ==================== GET ANNOUNCEMENTS ====================
+      case "get_announcements":
+      case "list_announcements":
+      case "show_announcements": {
+        const limit = args.limit || 5;
+
+        // Fetch published announcements, newest first
+        const announcements = await prisma.announcement.findMany({
+          where: { published: true },
+          orderBy: { createdAt: "desc" },
+          take: Math.min(limit, 10), // Max 10 to keep message short
+          include: { author: { select: { fullName: true } } }
+        });
+
+        // Build formatted message for WhatsApp
+        let message = `📢 *LATEST ANNOUNCEMENTS*\n\n`;
+
+        if (announcements.length === 0) {
+          message += `No announcements found.`;
+          return { message, announcements: [] };
+        }
+
+        for (const a of announcements) {
+          const date = new Date(a.createdAt).toLocaleDateString('en-KE', {
+            day: 'numeric', month: 'short', year: 'numeric'
+          });
+          const author = a.author?.fullName || 'Admin';
+          let content = a.content || '';
+          if (content.length > 150) {
+            content = content.substring(0, 147) + '...';
+          }
+          message += `📌 *${a.title}*\n`;
+          message += `   📅 ${date} | 👤 ${author}\n`;
+          message += `   ${content}\n\n`;
+        }
+
+        if (announcements.length > limit) {
+          message += `... and ${announcements.length - limit} more\n`;
+        }
+
+        message += `📱 *View all:* ${FRONTEND_URL}/admin/announcements`;
+
+        return {
+          message,  // ← WhatsApp displays this
+          announcements: announcements.map(a => ({
+            id: a.id,
+            title: a.title,
+            content: a.content,
+            category: a.category,
+            author: a.author?.fullName,
+            createdAt: a.createdAt
+          }))
+        };
       }
 
       // ==================== MEDIA ====================

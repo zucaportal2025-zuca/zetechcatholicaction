@@ -813,43 +813,53 @@ cleanupAuth() {
   // =============================================
   // 📤 SEND TO SPECIFIC GROUP (BY ID)
   // =============================================
- async sendToSpecificGroup(groupId, message, quoted = null) {
-    if (!this.sock || !this.isConnected) {
-      throw new Error('Bot is not connected to WhatsApp');
-    }
-
-    try {
-     const result = await this.sock.sendMessage(
-    groupId,
-    {
-        text: message
-    },
-    quoted ? { quoted } : {}
-);
-      console.log(`✅ Message sent to ${groupId}`);
-      
-      // ✅ Track message
-      if (result && result.key && result.key.id) {
-        await prisma.whatsAppMessage.create({
-          data: {
-            messageId: result.key.id,
-            groupId: groupId,
-            message: message,
-            originalMessage: message,
-            type: 'group',
-            status: 'sent',
-            sentAt: new Date()
-          }
-        });
-        console.log(`📝 Message tracked: ${result.key.id}`);
-      }
-      
-      return result;
-    } catch (error) {
-      console.error(`❌ Failed to send to ${groupId}:`, error.message);
-      throw error;
-    }
+ async sendToSpecificGroup(groupId, message, quoted = null, mentionedJids = []) {
+  if (!this.sock || !this.isConnected) {
+    throw new Error('Bot is not connected to WhatsApp');
   }
+
+  try {
+    // ✅ Build message with mentions support
+    const sendOptions = {
+      text: message
+    };
+    
+    // ✅ Add mentions if any JIDs provided
+    if (mentionedJids && mentionedJids.length > 0) {
+      sendOptions.mentions = mentionedJids;
+      console.log(`📌 Tagging ${mentionedJids.length} users:`, mentionedJids);
+    }
+    
+    const result = await this.sock.sendMessage(
+      groupId,
+      sendOptions,
+      quoted ? { quoted } : {}
+    );
+    
+    console.log(`✅ Message sent to ${groupId}`);
+    
+    // ✅ Track message
+    if (result && result.key && result.key.id) {
+      await prisma.whatsAppMessage.create({
+        data: {
+          messageId: result.key.id,
+          groupId: groupId,
+          message: message,
+          originalMessage: message,
+          type: 'group',
+          status: 'sent',
+          sentAt: new Date()
+        }
+      });
+      console.log(`📝 Message tracked: ${result.key.id}`);
+    }
+    
+    return result;
+  } catch (error) {
+    console.error(`❌ Failed to send to ${groupId}:`, error.message);
+    throw error;
+  }
+}
 
   // =============================================
   // 📤 SEND TO USER
@@ -1091,106 +1101,145 @@ cleanupAuth() {
     }
   }
 
+    // =============================================
+  // 🤖 HANDLE AI MENTION - WITH TAGGING SUPPORT
   // =============================================
-// 🤖 HANDLE AI MENTION - AUTO-REPLY WHERE MENTIONED
-// =============================================
-async handleAIMention(from, text, msg) {
-  try {
-    // Send typing indicator
-    await this.sock.sendPresenceUpdate('composing', from);
-    
-    // Get bot identifiers for cleaning
-    const botNumber = this.botNumber || this.sock?.user?.id?.split(':')[0];
-    const lidNumber = this.botLid;
-    
-    // Clean the text - remove mentions and bot names
-    let cleanText = text
-      .replace(/@[0-9]+\.[0-9]+/g, '')
-      .replace(new RegExp(`@${botNumber}`, 'g'), '')
-      .replace(new RegExp(`@${lidNumber}`, 'g'), '')
-      .replace(/@[a-zA-Z0-9\-_:.]+/g, '')
-      .replace(/@ZUCA_Bot/gi, '')
-      .replace(/@ZUCA Bot/gi, '')
-      .replace(/ZUCA Bot/gi, '')
-      .replace(/zuca bot/gi, '')
-      .replace(/hey bot/gi, '')
-      .replace(/hello bot/gi, '')
-      .replace(/hi bot/gi, '')
-      .replace(/@zuca/gi, '')
-      .replace(new RegExp(botNumber, 'g'), '')
-      .replace(new RegExp(lidNumber, 'g'), '')
-      .replace(/\s+/g, ' ')
-      .trim();
-    
-    console.log(`📝 Clean text: "${cleanText}"`);
-    
-    if (!cleanText || cleanText.length < 2) {
-      await this.sendToSpecificGroup(from, ' How can I help you?\n\n💡 Try: "What\'s today\'s mass?" or "Show campaigns"');
-      return;
-    }
-    
-    console.log(`🤖 Sending to AI: "${cleanText}"`);
-    
-    const aiResponse = await this.callAISystem(cleanText, from);
-    
-    if (aiResponse) {
-      // ✅ Check if it's the executive team response
-      const isExecutiveTeam = aiResponse.includes('👔 *ZUCA EXECUTIVE TEAM*');
-      
-      if (isExecutiveTeam) {
-        // ✅ Send executive team as ONE SINGLE MESSAGE
-        console.log('📤 Sending executive team as single message');
-        await this.sendToSpecificGroup(from, aiResponse, msg);
-      } else if (aiResponse.length > 2000) {
-        // For other long messages, split into chunks
-        const chunks = aiResponse.match(/.{1,2000}/g) || [];
-        for (const chunk of chunks) {
-          await this.sendToSpecificGroup(from, chunk, msg);
-          await new Promise(resolve => setTimeout(resolve, 500));
-        }
-      } else {
-       await this.sendToSpecificGroup(from, aiResponse, msg);
-      }
-    } else {
-      await this.sendToSpecificGroup(from, '🙏 Sorry, I had trouble processing that. Please try again.');
-    }
-    
-  } catch (error) {
-    console.error('❌ AI mention error:', error);
+  async handleAIMention(from, text, msg) {
     try {
-      await this.sendToSpecificGroup(from, '🙏 Sorry, I had trouble processing that. Please try again.');
-    } catch (e) {
-      console.error('❌ Failed to send error response:', e.message);
+      await this.sock.sendPresenceUpdate('composing', from);
+      
+      const botNumber = this.botNumber || this.sock?.user?.id?.split(':')[0];
+      const lidNumber = this.botLid;
+      const sender = msg.key.participant || msg.key.remoteJid;
+      
+      // ✅ EXTRACT USER MENTIONS
+const userJids = [];
+
+// ✅ 1. Get mentioned user's JID from the message context (EXACT FORMAT)
+const mentionedJids = msg.message?.extendedTextMessage?.contextInfo?.mentionedJid || [];
+if (mentionedJids.length > 0) {
+  for (const jid of mentionedJids) {
+    const jidNumber = jid.split(/[:@]/)[0];
+    if (jidNumber !== botNumber && jidNumber !== lidNumber) {
+      if (!userJids.some(j => j === jid)) {
+        userJids.push(jid);
+        console.log(`📌 Using JID from message: ${jid}`);
+      }
     }
   }
-  
 }
 
-  // =============================================
-// 🧠 CALL AI SYSTEM
+// ✅ 2. If no JID from context, check previous message's context
+if (userJids.length === 0) {
+  const history = this.getConversationHistory(from);
+  if (history && history.length > 0) {
+    for (let i = history.length - 1; i >= 0; i--) {
+      const prevMsg = history[i];
+      if (prevMsg.role === 'user' && prevMsg.jids && prevMsg.jids.length > 0) {
+        for (const jid of prevMsg.jids) {
+          const jidNumber = jid.split(/[:@]/)[0];
+          if (jidNumber !== botNumber && jidNumber !== lidNumber) {
+            if (!userJids.some(j => j === jid)) {
+              userJids.push(jid);
+              console.log(`📌 Using JID from history: ${jid}`);
+            }
+          }
+        }
+        break;
+      }
+    }
+  }
+}
+
+// ✅ 3. ADD THE SENDER TO MENTIONS (use EXACT JID)
+if (sender && !sender.includes(botNumber) && !sender.includes(lidNumber)) {
+  const senderExists = userJids.some(j => j === sender);
+  if (!senderExists) {
+    userJids.push(sender);
+    console.log(`📌 Adding sender to mentions: ${sender}`);
+  }
+}
+      
+      // Clean the text - remove ONLY bot mentions, KEEP user mentions
+      let cleanText = text
+        .replace(new RegExp(`@${botNumber}`, 'g'), '')
+        .replace(new RegExp(`@${lidNumber}`, 'g'), '')
+        .replace(/@ZUCA_Bot/gi, '')
+        .replace(/@ZUCA Bot/gi, '')
+        .replace(/ZUCA Bot/gi, '')
+        .replace(/zuca bot/gi, '')
+        .replace(/hey bot/gi, '')
+        .replace(/hello bot/gi, '')
+        .replace(/hi bot/gi, '')
+        .replace(/@zuca/gi, '')
+        .replace(new RegExp(botNumber, 'g'), '')
+        .replace(new RegExp(lidNumber, 'g'), '')
+        // ✅ KEEP user @mentions - DON'T remove them
+        .replace(/\s+/g, ' ')
+        .trim();
+      
+      const cleanForAI = cleanText;
+      
+      console.log(`📝 Original: "${text}"`);
+      console.log(`📝 Clean text: "${cleanText}"`);
+      console.log(`📝 For AI: "${cleanForAI}"`);
+      console.log(`📌 Mentions found: ${userJids.length}`, userJids);
+      
+      if (!cleanForAI || cleanForAI.length < 2) {
+        await this.sendToSpecificGroup(from, '🙏 How can I help you?\n\n💡 Try: "What\'s today\'s mass?" or "Show campaigns"');
+        return;
+      }
+      
+      console.log(`🤖 Sending to AI: "${cleanForAI}"`);
+      
+      // ✅ Get sender's name for AI context
+      const senderName = msg.pushName || 'Someone';
+      console.log(`👤 Sender name: ${senderName}`);
+      
+      // ✅ Pass sender name and JIDs to AI
+      const aiResponse = await this.callAISystem(cleanForAI, from, userJids, senderName);
+      
+      if (aiResponse) {
+        // ✅ Send with mentions (both mentioned user AND sender)
+        await this.sendToSpecificGroup(from, aiResponse, msg, userJids);
+      } else {
+        await this.sendToSpecificGroup(from, '🙏 Sorry, I had trouble processing that. Please try again.');
+      }
+      
+    } catch (error) {
+      console.error('❌ AI mention error:', error);
+      try {
+        await this.sendToSpecificGroup(from, '🙏 Sorry, I had trouble processing that. Please try again.');
+      } catch (e) {
+        console.error('❌ Failed to send error response:', e.message);
+      }
+    }
+  }// =============================================
+// 🧠 CALL AI SYSTEM - WITH SENDER NAME
 // =============================================
-async callAISystem(message, from) {
+async callAISystem(message, from, mentionedJids = [], senderName = 'Someone') {
   try {
     const userContext = {
-      user: null,
+      user: { fullName: senderName },  // ← Pass sender name to AI
       stats: {},
       currentTime: new Date().toISOString(),
-      source: 'whatsapp'
+      source: 'whatsapp',
+      mentionedJids: mentionedJids
     };
     
     const history = this.getConversationHistory(from);
 
-const messages = [
-  {
-    role: "system",
-    content: "You are ZUCA Bot. Remember previous messages in this conversation and answer follow-up questions naturally."
-  },
-  ...history,
-  {
-    role: "user",
-    content: message
-  }
-];
+    const messages = [
+      {
+        role: "system",
+        content: "You are ZUCA Bot. Remember previous messages in this conversation and answer follow-up questions naturally."
+      },
+      ...history,
+      {
+        role: "user",
+        content: message
+      }
+    ];
     
     const aiResponse = await chatWithGroq(messages, userContext);
     
@@ -1209,7 +1258,6 @@ const messages = [
         console.log('📦 Action result:', JSON.stringify(actionResult, null, 2));
         
         if (actionResult) {
-          // ✅ Check for message field first
           if (actionResult.message) {
             finalReply = actionResult.message;
           } else {
@@ -1225,10 +1273,10 @@ const messages = [
       }
     }
     
-   this.saveConversation(from, "user", message);
-this.saveConversation(from, "assistant", finalReply);
+    this.saveConversation(from, "user", message);
+    this.saveConversation(from, "assistant", finalReply);
 
-return finalReply;
+    return finalReply;
     
   } catch (error) {
     console.error('AI call error:', error);
