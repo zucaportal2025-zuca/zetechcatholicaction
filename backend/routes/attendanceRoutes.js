@@ -7,7 +7,106 @@ const crypto = require('crypto');
 
 const { sendPersonalizedEmail } = require("../services/mailer");
 const { getCurrentSemester, getSemesterDateFilter } = require("../utils/semesterHelpers");
+const { sendAttendanceToWhatsApp } = require('../services/whatsappAttendanceService');
 
+// ==================== WHATSAPP AUTO-SEND ROUTES ====================
+
+/**
+ * GET - Get WhatsApp settings for a sheet
+ */
+router.get("/sheet/:sheetId/whatsapp-settings", authenticate, requireLeaderOrAdmin, async (req, res) => {
+  try {
+    const { sheetId } = req.params;
+    
+    const sheet = await prisma.attendanceSheet.findUnique({
+      where: { id: sheetId },
+      select: {
+        id: true,
+        enableWhatsAppAutoSend: true,
+        whatsAppGroupIds: true,
+        whatsAppGroupNames: true,
+        whatsAppCustomMessage: true,
+        whatsAppSendOnCheckin: true,
+        whatsAppSendOnClose: true,
+        whatsAppLastSentCount: true
+      }
+    });
+    
+    if (!sheet) {
+      return res.status(404).json({ error: 'Sheet not found' });
+    }
+    
+    res.json({ success: true, settings: sheet });
+    
+  } catch (error) {
+    console.error('❌ Get WhatsApp settings error:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+/**
+ * PUT - Update WhatsApp settings for a sheet
+ */
+router.put("/sheet/:sheetId/whatsapp-settings", authenticate, requireLeaderOrAdmin, async (req, res) => {
+  try {
+    const { sheetId } = req.params;
+    const { 
+      enableWhatsAppAutoSend,
+      whatsAppGroupIds,
+      whatsAppGroupNames,
+      whatsAppCustomMessage,
+      whatsAppSendOnCheckin,
+      whatsAppSendOnClose
+    } = req.body;
+    
+    const sheet = await prisma.attendanceSheet.findUnique({
+      where: { id: sheetId }
+    });
+    
+    if (!sheet) {
+      return res.status(404).json({ error: 'Sheet not found' });
+    }
+    
+    const updated = await prisma.attendanceSheet.update({
+      where: { id: sheetId },
+      data: {
+        enableWhatsAppAutoSend: enableWhatsAppAutoSend !== undefined ? enableWhatsAppAutoSend : sheet.enableWhatsAppAutoSend,
+        whatsAppGroupIds: whatsAppGroupIds !== undefined ? whatsAppGroupIds : sheet.whatsAppGroupIds,
+        whatsAppGroupNames: whatsAppGroupNames !== undefined ? whatsAppGroupNames : sheet.whatsAppGroupNames,
+        whatsAppCustomMessage: whatsAppCustomMessage !== undefined ? whatsAppCustomMessage : sheet.whatsAppCustomMessage,
+        whatsAppSendOnCheckin: whatsAppSendOnCheckin !== undefined ? whatsAppSendOnCheckin : sheet.whatsAppSendOnCheckin,
+        whatsAppSendOnClose: whatsAppSendOnClose !== undefined ? whatsAppSendOnClose : sheet.whatsAppSendOnClose
+      }
+    });
+    
+    res.json({ success: true, sheet: updated });
+    
+  } catch (error) {
+    console.error('❌ Update WhatsApp settings error:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+/**
+ * POST - Manually send attendance list to WhatsApp
+ */
+router.post("/sheet/:sheetId/send-whatsapp", authenticate, requireLeaderOrAdmin, async (req, res) => {
+  try {
+    const { sheetId } = req.params;
+    
+    const result = await sendAttendanceToWhatsApp(sheetId);
+    
+    if (result.success) {
+      res.json({ success: true, ...result });
+    } else {
+      res.status(400).json({ success: false, error: result.error });
+    }
+    
+  } catch (error) {
+    console.error('❌ Send WhatsApp error:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
 
 // ==================== SHEET CACHE ====================
 const sheetCache = new Map();
@@ -432,6 +531,19 @@ router.post("/qr-checkin", authenticate, async (req, res) => {
             }
           });
         }
+
+            // ✅ WHATSAPP AUTO-SEND TRIGGER
+        const sheet = await prisma.attendanceSheet.findUnique({
+          where: { id: qrToken.sheetId },
+          select: { enableWhatsAppAutoSend: true, whatsAppSendOnCheckin: true }
+        });
+
+        if (sheet?.enableWhatsAppAutoSend && sheet?.whatsAppSendOnCheckin) {
+          sendAttendanceToWhatsApp(qrToken.sheetId).catch(err => {
+            console.error('⚠️ WhatsApp auto-send failed:', err.message);
+          });
+        }
+
       } catch (bgErr) {
         console.error("Background notification failed:", bgErr.message);
       }
@@ -863,78 +975,88 @@ const createAttendanceSheet = async (req, res) => {
       allowSelfCheckin,
       enableWifiCheckin,
       wifiSSID,
-      jumuiaId
+      jumuiaId,
+      enableWhatsAppAutoSend,
+      whatsAppGroupIds,
+      whatsAppGroupNames,
+      whatsAppCustomMessage,
+      whatsAppSendOnCheckin,
+      whatsAppSendOnClose
     } = req.body;
 
     if (!title || !eventDate) {
       return res.status(400).json({ error: "Title and event date are required" });
     }
 
-  // Handle executive-team as a special value
-let targetJumuiaId = jumuiaId;
-let isExecutiveOnly = false;
+    let targetJumuiaId = jumuiaId;
+    let isExecutiveOnly = false;
 
-if (jumuiaId === 'executive-team') {
-  targetJumuiaId = null;
-  isExecutiveOnly = true;  
-}
+    if (jumuiaId === 'executive-team') {
+      targetJumuiaId = null;
+      isExecutiveOnly = true;  
+    }
 
-const sheet = await prisma.attendanceSheet.create({
-  data: {
-    title,
-    description,
-    eventDate: new Date(eventDate),
-    eventTime,
-    location,
-    allowSelfCheckin: allowSelfCheckin || false,
-    enableWifiCheckin: enableWifiCheckin || false,
-    wifiSSID: enableWifiCheckin ? wifiSSID : null,
-    jumuiaId: targetJumuiaId,
-    isExecutiveOnly: isExecutiveOnly, 
-    createdBy: req.user.userId,
-    isActive: true
-  }
-});
+    const sheet = await prisma.attendanceSheet.create({
+      data: {
+        title,
+        description,
+        eventDate: new Date(eventDate),
+        eventTime,
+        location,
+        allowSelfCheckin: allowSelfCheckin || false,
+        enableWifiCheckin: enableWifiCheckin || false,
+        wifiSSID: enableWifiCheckin ? wifiSSID : null,
+        jumuiaId: targetJumuiaId,
+        isExecutiveOnly: isExecutiveOnly, 
+        createdBy: req.user.userId,
+        isActive: true,
+        enableWhatsAppAutoSend: enableWhatsAppAutoSend || false,
+        whatsAppGroupIds: whatsAppGroupIds || null,
+        whatsAppGroupNames: whatsAppGroupNames || null,
+        whatsAppCustomMessage: whatsAppCustomMessage || null,
+        whatsAppSendOnCheckin: whatsAppSendOnCheckin !== undefined ? whatsAppSendOnCheckin : true,
+        whatsAppSendOnClose: whatsAppSendOnClose !== undefined ? whatsAppSendOnClose : true
+      }
+    });
 
-    // ✅ SEND RESPONSE IMMEDIATELY - User doesn't wait
     res.status(201).json({ success: true, sheet });
     
-    // ✅ SEND NOTIFICATIONS IN BACKGROUND (don't await)
-   // INSIDE createAttendanceSheet - replace the background notification section
-(async () => {
-  try {
-    let targetUsers = [];
+    // Background notifications
+    (async () => {
+      try {
+        let targetUsers = [];
+        
+        if (sheet.isExecutiveOnly) {
+          const executives = await prisma.executive.findMany({
+            where: { isActive: true },
+            select: { userId: true }
+          });
+          targetUsers = executives.map(exec => ({ id: exec.userId }));
+        } else if (sheet.jumuiaId) {
+          targetUsers = await prisma.user.findMany({
+            where: { jumuiaId: sheet.jumuiaId },
+            select: { id: true }
+          });
+        } else {
+          targetUsers = await prisma.user.findMany({ select: { id: true } });
+        }
+        
+        const meetingDate = new Date(sheet.eventDate).toLocaleDateString();
+        
+        for (const user of targetUsers) {
+          await createAndSendNotification({
+            userId: user.id,
+            type: "attendance_sheet_opened",
+            title: `📋 Attendance Open: ${sheet.title}`,
+            message: `Attendance sheet for "${sheet.title}" on ${meetingDate} is now open.`,
+            data: { sheetId: sheet.id }
+          });
+        }
+      } catch (err) {
+        console.error("Failed to send sheet notifications:", err.message);
+      }
+    })();
     
-    if (sheet.isExecutiveOnly) {
-      const executives = await prisma.executive.findMany({
-        where: { isActive: true },
-        select: { userId: true }
-      });
-      targetUsers = executives.map(exec => ({ id: exec.userId }));
-    } else if (sheet.jumuiaId) {
-      targetUsers = await prisma.user.findMany({
-        where: { jumuiaId: sheet.jumuiaId },
-        select: { id: true }
-      });
-    } else {
-      targetUsers = await prisma.user.findMany({ select: { id: true } });
-    }
-    
-    const meetingDate = new Date(sheet.eventDate).toLocaleDateString();
-    
-    for (const user of targetUsers) {
-      await createAndSendNotification({
-        userId: user.id,
-        type: "attendance_sheet_opened",
-        title: `📋 Attendance Open: ${sheet.title}`,
-        message: `Attendance sheet for "${sheet.title}" on ${meetingDate} is now open.`,
-        data: { sheetId: sheet.id }
-      });
-    }
-  } catch (err) {
-    console.error("Failed to send sheet notifications:", err.message);
-  }
-})();
   } catch (err) {
     console.error("Create attendance sheet error:", err);
     res.status(500).json({ error: err.message });
@@ -1350,6 +1472,13 @@ const selfCheckin = async (req, res) => {
     // Send check-in confirmation
     await sendCheckinConfirmation(userId, sheet.title, entry);
 
+     // ✅ WHATSAPP AUTO-SEND TRIGGER
+    if (sheet.enableWhatsAppAutoSend && sheet.whatsAppSendOnCheckin) {
+      sendAttendanceToWhatsApp(sheetId).catch(err => {
+        console.error('⚠️ WhatsApp auto-send failed:', err.message);
+      });
+    }
+
     res.json({ success: true, entry });
   } catch (err) {
     console.error("Self check-in error:", err);
@@ -1441,6 +1570,13 @@ const wifiCheckin = async (req, res) => {
     });
 
     await sendCheckinConfirmation(userId, sheet.title, entry);
+
+      // ✅ WHATSAPP AUTO-SEND TRIGGER
+    if (sheet.enableWhatsAppAutoSend && sheet.whatsAppSendOnCheckin) {
+      sendAttendanceToWhatsApp(sheetId).catch(err => {
+        console.error('⚠️ WhatsApp auto-send failed:', err.message);
+      });
+    }
 
     res.json({ success: true, entry });
   } catch (err) {
@@ -1568,6 +1704,14 @@ const adminAddEntry = async (req, res) => {
       sendCheckinConfirmation(user.id, sheet.title, entry);
     }
 
+
+       // ✅ WHATSAPP AUTO-SEND TRIGGER
+    if (sheet.enableWhatsAppAutoSend && sheet.whatsAppSendOnCheckin) {
+      sendAttendanceToWhatsApp(sheetId).catch(err => {
+        console.error('⚠️ WhatsApp auto-send failed:', err.message);
+      });
+    }
+
   } catch (err) {
     console.error("Admin add entry error:", err);
     res.status(500).json({ error: err.message });
@@ -1640,6 +1784,13 @@ const closeSheet = async (req, res) => {
 
     // Send notifications to all members
     await sendSheetClosedNotification(sheetId);
+
+     // ✅ WHATSAPP AUTO-SEND TRIGGER ON CLOSE
+    if (updated.enableWhatsAppAutoSend && updated.whatsAppSendOnClose) {
+      sendAttendanceToWhatsApp(sheetId).catch(err => {
+        console.error('⚠️ WhatsApp auto-send on close failed:', err.message);
+      });
+    }
 
     // Emit socket event
     const io = req.app.get("io");
@@ -2010,6 +2161,13 @@ router.post("/sheet/:sheetId/entries/batch", authenticate, requireLeaderOrAdmin,
         sheetId: sheetId,
         count: entries.length,
         entries: entries
+      });
+    }
+
+     // ✅ WHATSAPP AUTO-SEND TRIGGER FOR BULK ADD
+    if (sheet.enableWhatsAppAutoSend && sheet.whatsAppSendOnCheckin && entries.length > 0) {
+      sendAttendanceToWhatsApp(sheetId).catch(err => {
+        console.error('⚠️ WhatsApp auto-send (bulk) failed:', err.message);
       });
     }
     

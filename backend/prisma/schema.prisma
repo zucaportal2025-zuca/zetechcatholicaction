@@ -1433,12 +1433,19 @@ model AttendanceSheet {
   createdBy   String
   createdAt   DateTime @default(now())
   closedAt    DateTime?
+
+   enableWhatsAppAutoSend    Boolean   @default(false)
+  whatsAppGroupIds          String?
+  whatsAppGroupNames        String?
+  whatsAppCustomMessage     String?
+  whatsAppSendOnCheckin     Boolean   @default(true)
+  whatsAppSendOnClose       Boolean   @default(true)
+  whatsAppLastSentCount     Int       @default(0)
   
-  // Relations
   entries     AttendanceEntry[]
-   qrCodes            QRCodeToken[]  
+  qrCodes     QRCodeToken[]  
   creator     User     @relation("UserAttendanceSheets", fields: [createdBy], references: [id], onDelete: Cascade)
-    attendanceLinks AttendanceLink[]
+  attendanceLinks AttendanceLink[]
 
   @@index([createdBy])
   @@index([eventDate])
@@ -1447,6 +1454,8 @@ model AttendanceSheet {
 
   meetingMinutes MeetingMinutes[]
 }
+  
+ 
 
 model AttendanceEntry {
   id            String   @id @default(uuid())
