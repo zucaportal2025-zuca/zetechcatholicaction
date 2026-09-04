@@ -108,6 +108,83 @@ router.post("/sheet/:sheetId/send-whatsapp", authenticate, requireLeaderOrAdmin,
   }
 });
 
+
+// ==================== UPDATE SHEET DETAILS ====================
+
+/**
+ * PUT - Update sheet details (title, description, date, time, location, jumuia)
+ */
+router.put("/sheet/:sheetId/details", authenticate, requireLeaderOrAdmin, async (req, res) => {
+  try {
+    const { sheetId } = req.params;
+    const { 
+      title, 
+      description, 
+      eventDate, 
+      eventTime, 
+      location, 
+      jumuiaId,
+      allowSelfCheckin,
+      enableWifiCheckin
+    } = req.body;
+
+    // Check if sheet exists
+    const sheet = await prisma.attendanceSheet.findUnique({
+      where: { id: sheetId }
+    });
+
+    if (!sheet) {
+      return res.status(404).json({ error: 'Sheet not found' });
+    }
+
+    // Handle executive-team special value
+    let targetJumuiaId = jumuiaId;
+    let isExecutiveOnly = false;
+
+    if (jumuiaId === 'executive-team') {
+      targetJumuiaId = null;
+      isExecutiveOnly = true;
+    }
+
+    // Build update data
+    const updateData = {
+      title: title || sheet.title,
+      description: description !== undefined ? description : sheet.description,
+      eventDate: eventDate ? new Date(eventDate) : sheet.eventDate,
+      eventTime: eventTime || sheet.eventTime,
+      location: location !== undefined ? location : sheet.location,
+      jumuiaId: targetJumuiaId,
+      isExecutiveOnly: isExecutiveOnly
+    };
+
+    // Only update check-in settings if provided
+    if (allowSelfCheckin !== undefined) {
+      updateData.allowSelfCheckin = allowSelfCheckin;
+    }
+    if (enableWifiCheckin !== undefined) {
+      updateData.enableWifiCheckin = enableWifiCheckin;
+    }
+
+    const updated = await prisma.attendanceSheet.update({
+      where: { id: sheetId },
+      data: updateData
+    });
+
+    // Invalidate cache
+    invalidateSheetCache(sheetId);
+
+    res.json({ 
+      success: true, 
+      sheet: updated,
+      message: 'Sheet details updated successfully'
+    });
+
+  } catch (error) {
+    console.error('❌ Update sheet details error:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
 // ==================== SHEET CACHE ====================
 const sheetCache = new Map();
 const SHEET_CACHE_TTL = 60 * 1000; // 1 minute
