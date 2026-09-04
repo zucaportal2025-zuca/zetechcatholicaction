@@ -29,6 +29,8 @@ const messengerRoutes = require('./routes/messenger');
 const { checkSemesterEndAndSendReports } = require('./services/semesterScheduler');
 const { monitoringMiddleware, systemMonitor } = require('./services/systemMonitor');
 
+const { processBirthdayAdverts } = require("./services/cronJobs");
+
 // ================== DATABASE & AUTH ==================
 const { PrismaClient } = require("@prisma/client");
 const prisma = new PrismaClient();
@@ -1663,6 +1665,11 @@ app.use('/api', countdownRoutes);
 const advertisementRoutes = require('./routes/advertisementRoutes');
 app.use('/api/advertisements', advertisementRoutes);
 
+//birthday
+const birthdayRoutes = require("./routes/birthday");
+app.use("/api/birthday", birthdayRoutes);
+
+
 // ================== IMPROVED PROXY ROUTES (WITH BETTER ERROR HANDLING) ==================
 
 // Proxy for Ora et Labora API (All prayers)
@@ -2073,6 +2080,13 @@ app.post("/api/cron/check", async (req, res) => {
     // ========== EVENT REMINDERS - EVERY HOUR ==========
     await sendEventReminders();
     executed.push("event_reminders");
+
+     // ========== BIRTHDAY ADVERTS - DAILY AT 8:00 AM ==========
+    if (hour === 8 && minute < 5) {
+      console.log("🎂 Running birthday advert check...");
+      await processBirthdayAdverts();
+      executed.push("birthday_adverts");
+    }
     
     // ========== ✅ SEMESTER END CHECK - EVERY DAY AT MIDNIGHT ==========
     // Check if a semester has ended and send reports

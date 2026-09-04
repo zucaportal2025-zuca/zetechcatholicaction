@@ -200,8 +200,155 @@ async function checkNoAnnouncements() {
   }
 }
 
+// =============================================
+// BIRTHDAY ADVERT PROCESSING
+// =============================================
+
+async function processBirthdayAdverts() {
+  console.log("Running birthday advert check...");
+
+  const today = new Date();
+  const month = today.getMonth() + 1;
+  const day = today.getDate();
+
+  const settings = await prisma.birthdaySetting.findFirst();
+
+  if (!settings || !settings.autoCreateAdvert) {
+    console.log("Birthday adverts are disabled, skipping");
+    return;
+  }
+
+  const users = await prisma.user.findMany({
+    where: {
+      birthdayOptIn: true,
+      birthMonth: month,
+      birthDay: day,
+      birthdayPhoto: { not: null }
+    }
+  });
+
+  if (users.length === 0) {
+    console.log("No birthdays today");
+    return;
+  }
+
+  console.log(`Found ${users.length} birthday(s) today`);
+
+  for (const user of users) {
+    try {
+      console.log(`Processing birthday for: ${user.fullName}`);
+
+      // ✅ Use original photo directly - NO image generation
+      const imageUrl = user.birthdayPhoto;
+
+      let advert = null;
+      if (settings.autoCreateAdvert && imageUrl) {
+        advert = await prisma.advertisement.create({
+          data: {
+            title: `Happy Birthday, ${user.fullName}!`,
+            description: `Today we celebrate ${user.fullName}'s special day. Join us in wishing them a blessed year ahead.`,
+            image: imageUrl,
+            startDate: new Date(),
+            endDate: new Date(Date.now() + 24 * 60 * 60 * 1000),
+            active: true,
+            buttonText: "Add Your's here",
+            link: "/profile",
+            birthdayUser: {
+              connect: { id: user.id }
+            }
+          }
+        });
+
+        await prisma.user.update({
+          where: { id: user.id },
+          data: { birthdayAdvertId: advert.id }
+        });
+
+        console.log(`Advertisement created for ${user.fullName}`);
+      }
+
+      if (settings.sendPushToAll && advert) {
+        const allUsers = await prisma.user.findMany({
+          select: { id: true }
+        });
+
+        let sentCount = 0;
+        for (const targetUser of allUsers) {
+          try {
+            if (global.createAndSendNotification) {
+              await global.createAndSendNotification({
+                userId: targetUser.id,
+                type: "birthday",
+                title: `Today is ${user.fullName.split(" ")[0]}'s Birthday!`,
+                message: `Celebrate with ${user.fullName}! Check the ZUCA dashboard to wish them a happy birthday!`,
+                data: {
+                  type: "birthday",
+                  birthdayUserId: user.id,
+                  advertId: advert.id
+                }
+              });
+              sentCount++;
+            }
+          } catch (err) {
+            // Silent fail for individual notifications
+          }
+        }
+        console.log(`Push notifications sent to ${sentCount} users`);
+      }
+
+  if (settings.sendToWhatsApp && imageUrl) {
+  try {
+    const whatsappBot = require("./whatsapp.bot");
+    const activeGroups = await prisma.whatsAppGroup.findMany({
+      where: { isActive: true }
+    });
+
+    if (activeGroups.length > 0) {
+      const message = (settings.whatsAppMessage || "Happy Birthday {name}!").replace(/{name}/g, user.fullName);
+
+      for (const group of activeGroups) {
+        try {
+  if (whatsappBot.sock && whatsappBot.isConnected) {
+    await whatsappBot.sock.sendMessage(group.groupId, {
+      image: { url: imageUrl },
+      caption: message
+    });
+    console.log(`WhatsApp sent to ${group.groupName || group.groupId}`);
+  } else {
+    console.log(`⚠️ Bot not connected, message not sent to ${group.groupId}`);
+  }
+
+  // ✅ SET BIRTHDAY MODE IN DATABASE - ALWAYS RUN
+  await prisma.whatsAppGroup.update({
+    where: { groupId: group.groupId },
+    data: {
+      birthdayMode: true,
+      birthdayModeExpires: new Date(Date.now() + 24 * 60 * 60 * 1000)
+    }
+  });
+
+  console.log(`🔒 Birthday mode ON for ${group.groupName || group.groupId} (24 hours)`);
+} catch (err) {
+  console.error(`Failed for ${group.groupId}:`, err.message);
+}
+      }
+    }
+  } catch (err) {
+    console.error("WhatsApp send failed:", err.message);
+  }
+}
+
+      console.log(`Birthday completed for ${user.fullName}`);
+
+    } catch (error) {
+      console.error(`Birthday failed for ${user.fullName}:`, error.message);
+    }
+  }
+}
+
 module.exports = {
   sendEventReminders,
   sendCampaignReminders,
-  checkNoAnnouncements
+  checkNoAnnouncements,
+  processBirthdayAdverts
 };

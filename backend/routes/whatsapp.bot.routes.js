@@ -353,7 +353,7 @@ router.post('/ai', authenticate, requireAdmin, async (req, res) => {
     console.error('WhatsApp AI error:', error);
     res.status(500).json({ 
       error: error.message,
-      reply: '🙏 Sorry, I had trouble processing that. Please try again.'
+      reply: '🙏'
     });
   }
 });

@@ -37,6 +37,7 @@ this.maxMemoryMessages = 20;
     this.groupsCache = null;
     this.groupsCacheTime = null;
     this.groupsCacheTTL = 5 * 60 * 1000; // 5 minutes
+    this.birthdayMode = new Map();
   }
 
  // =============================================
@@ -976,130 +977,164 @@ cleanupAuth() {
     }
   }
 
-  // =============================================
+   // =============================================
   // 📥 HANDLE INCOMING MESSAGES - FIXED VERSION
   // =============================================
   async handleIncomingMessage(m) {
-    try {
-      // ✅ Ensure LID is set
-      if (!this.botLid) {
-        console.log('⚠️ LID not set, using fallback');
-        this.botLid = '273010401485038';
-      }
-      
-      const msg = m.messages[0];
-      if (!msg || !msg.message) return;
+  try {
+    // ✅ Ensure LID is set
+    if (!this.botLid) {
+      console.log('⚠️ LID not set, using fallback');
+      this.botLid = '273010401485038';
+    }
+    
+    const msg = m.messages[0];
+    if (!msg || !msg.message) return;
 
-      const from = msg.key.remoteJid;
-      const sender = msg.key.participant || msg.key.remoteJid;
-      
-      // Get bot identifiers
-      const botId = this.sock?.user?.id;
-      const botNumber = botId?.split(':')[0] || this.botNumber;
-      
-      // Get LID from stored value
-      const lidNumber = this.botLid;
-      
-      // Log for debugging
-      console.log(`🔑 Bot Number: ${botNumber}, LID: ${lidNumber || 'null'}`);
-      
-      // Ignore own messages
-      if (sender === botId || from === botId || sender?.includes(botNumber)) {
-        console.log(`⏭️ Ignoring own message`);
-        return;
-      }
+    const from = msg.key.remoteJid;
+    const sender = msg.key.participant || msg.key.remoteJid;
+    
+    // Get bot identifiers
+    const botId = this.sock?.user?.id;
+    const botNumber = botId?.split(':')[0] || this.botNumber;
+    
+    // Get LID from stored value
+    const lidNumber = this.botLid;
+    
+    // Log for debugging
+    console.log(`🔑 Bot Number: ${botNumber}, LID: ${lidNumber || 'null'}`);
+    
+    // Ignore own messages
+    if (sender === botId || from === botId || sender?.includes(botNumber)) {
+      console.log(`⏭️ Ignoring own message`);
+      return;
+    }
 
-      const text = msg.message.conversation || 
-                   msg.message.extendedTextMessage?.text || 
-                   msg.message.imageMessage?.caption ||
-                   '';
+    const text = msg.message.conversation || 
+                 msg.message.extendedTextMessage?.text || 
+                 msg.message.imageMessage?.caption ||
+                 '';
 
-      if (!text) return;
+    if (!text) return;
 
-      console.log(`📩 Message from ${from}: ${text.substring(0, 50)}`);
+    console.log(`📩 Message from ${from}: ${text.substring(0, 50)}`);
 
-      const isGroup = from.endsWith('@g.us');
-      
-      if (isGroup) {
-        // =============================================
-        // 🔍 CHECK IF BOT IS MENTIONED
-        // =============================================
-        
-        // Get the bot's full JID
-        const botJid = this.sock?.user?.id || botId;
-        const botJidNumber = botJid?.split(':')[0] || botNumber;
-        
-        // Check for mentions in the message text
-        const hasPhoneMention = text.includes(`@${botJidNumber}`);
-        const hasLIDMention = lidNumber ? text.includes(`@${lidNumber}`) : false;
-        const hasLIDInText = lidNumber ? text.includes(lidNumber) : false;
-        
-        // Check for bot name mentions (case insensitive)
-        const botNameMentions = [
-          'zuca bot',
-          '@zuca',
-          '@zucabot',
-          'hey bot',
-          'hello bot',
-          'hi bot',
-          'zuccabot',
-          'zucabot',
-          '@zucabot'
-        ];
-        const hasTextMention = botNameMentions.some(mention => 
-          text.toLowerCase().includes(mention.toLowerCase())
-        );
-        
-        // Check mentioned JIDs from the message context
-        const mentionedJids = msg.message?.extendedTextMessage?.contextInfo?.mentionedJid || [];
-        const hasMentionedJid = mentionedJids.some(jid => {
-          if (!jid) return false;
-          const jidNumber = jid.split(/[:@]/)[0];
-          return jidNumber === botJidNumber || 
-                 (lidNumber && jidNumber === lidNumber) ||
-                 jid === botJid ||
-                 (lidNumber && jid.includes(lidNumber));
-        });
-        
-        // Check if message is a reply to bot
-        const isReplyToBot = msg.message?.extendedTextMessage?.contextInfo?.participant === botJid ||
-                            msg.message?.extendedTextMessage?.contextInfo?.participant === botId ||
-                            (lidNumber && msg.message?.extendedTextMessage?.contextInfo?.participant?.includes(lidNumber));
-        
-        // Check if bot number or LID appears in text (without @)
-        const hasBotNumberInText = text.includes(botJidNumber) || 
-                                   (lidNumber && text.includes(lidNumber));
-        
-        // COMBINED MENTION CHECK
-        const isMentioned = hasPhoneMention || 
-                           hasLIDMention || 
-                           hasLIDInText || 
-                           hasTextMention || 
-                           hasMentionedJid || 
-                           isReplyToBot ||
-                           hasBotNumberInText;
-        
-        // Log mention detection for debugging
-        console.log(`🔍 Mention check: phone=${hasPhoneMention}, lid=${hasLIDMention}, lidInText=${hasLIDInText}, text=${hasTextMention}, jid=${hasMentionedJid}, reply=${isReplyToBot}, numberInText=${hasBotNumberInText}`);
-        console.log(`🔍 Bot JID: ${botJidNumber}, LID: ${lidNumber || 'null'}, Message: "${text}"`);
-        
-        // =============================================
-        // 🤖 IF MENTIONED, REPLY WHERE MENTIONED
-        // =============================================
-        if (isMentioned) {
-          console.log(`🤖 Bot mentioned/replied! Processing with AI...`);
-          await this.handleAIMention(from, text, msg);
-          return;
-        }
+    const isGroup = from.endsWith('@g.us');
+    
+    if (isGroup) {
 
-        console.log(`⏭️ Ignoring normal message (no mention/reply)`);
-        return;
-      }
-
-    } catch (error) {
-      console.error('❌ Error handling message:', error.message);
+  
+  // =============================================
+  // 🎂 IGNORE REPLIES TO MESSAGES WITH IMAGES
+  // =============================================
+  const repliedToId = msg.message?.extendedTextMessage?.contextInfo?.stanzaId;
+  
+  if (repliedToId) {
+    // Check if the original message has an image
+    const originalMessage = await prisma.whatsAppMessage.findFirst({
+      where: { messageId: repliedToId }
+    });
+    
+    if (originalMessage && originalMessage.type === 'birthday') {
+      console.log(`🎂 Reply to birthday message (with image) - IGNORING`);
+      return;
     }
   }
+  
+      
+ 
+  
+  // 🎂 CHECK BIRTHDAY MODE FROM DATABASE
+  const group = await prisma.whatsAppGroup.findUnique({
+    where: { groupId: from },
+    select: { birthdayMode: true, birthdayModeExpires: true }
+  });
+  
+  if (group?.birthdayMode && group?.birthdayModeExpires > new Date()) {
+    console.log(`🎂 Birthday mode active for ${from} - IGNORING`);
+    return;
+  }
+  
+
+      // =============================================
+      // STEP 2: 🔍 CHECK IF BOT IS MENTIONED
+      // =============================================
+      
+      // Get the bot's full JID
+      const botJid = this.sock?.user?.id || botId;
+      const botJidNumber = botJid?.split(':')[0] || botNumber;
+      
+      // Check for mentions in the message text
+      const hasPhoneMention = text.includes(`@${botJidNumber}`);
+      const hasLIDMention = lidNumber ? text.includes(`@${lidNumber}`) : false;
+      const hasLIDInText = lidNumber ? text.includes(lidNumber) : false;
+      
+      // Check for bot name mentions (case insensitive)
+      const botNameMentions = [
+        'zuca bot',
+        '@zuca',
+        '@zucabot',
+        'hey bot',
+        'hello bot',
+        'hi bot',
+        'zuccabot',
+        'zucabot',
+        '@zucabot'
+      ];
+      const hasTextMention = botNameMentions.some(mention => 
+        text.toLowerCase().includes(mention.toLowerCase())
+      );
+      
+      // Check mentioned JIDs from the message context
+      const mentionedJids = msg.message?.extendedTextMessage?.contextInfo?.mentionedJid || [];
+      const hasMentionedJid = mentionedJids.some(jid => {
+        if (!jid) return false;
+        const jidNumber = jid.split(/[:@]/)[0];
+        return jidNumber === botJidNumber || 
+               (lidNumber && jidNumber === lidNumber) ||
+               jid === botJid ||
+               (lidNumber && jid.includes(lidNumber));
+      });
+      
+      // Check if message is a reply to bot
+      const isReplyToBot = msg.message?.extendedTextMessage?.contextInfo?.participant === botJid ||
+                          msg.message?.extendedTextMessage?.contextInfo?.participant === botId ||
+                          (lidNumber && msg.message?.extendedTextMessage?.contextInfo?.participant?.includes(lidNumber));
+      
+      // Check if bot number or LID appears in text (without @)
+      const hasBotNumberInText = text.includes(botJidNumber) || 
+                                 (lidNumber && text.includes(lidNumber));
+      
+      // COMBINED MENTION CHECK
+      const isMentioned = hasPhoneMention || 
+                         hasLIDMention || 
+                         hasLIDInText || 
+                         hasTextMention || 
+                         hasMentionedJid || 
+                         isReplyToBot ||
+                         hasBotNumberInText;
+      
+      // Log mention detection for debugging
+      console.log(`🔍 Mention check: phone=${hasPhoneMention}, lid=${hasLIDMention}, lidInText=${hasLIDInText}, text=${hasTextMention}, jid=${hasMentionedJid}, reply=${isReplyToBot}, numberInText=${hasBotNumberInText}`);
+      console.log(`🔍 Bot JID: ${botJidNumber}, LID: ${lidNumber || 'null'}, Message: "${text}"`);
+      
+      // =============================================
+      // 🤖 IF MENTIONED, REPLY WHERE MENTIONED
+      // =============================================
+      if (isMentioned) {
+        console.log(`🤖 Bot mentioned/replied! Processing with AI...`);
+        await this.handleAIMention(from, text, msg);
+        return;
+      }
+
+      console.log(`⏭️ Ignoring normal message (no mention/reply)`);
+      return;
+    }
+
+  } catch (error) {
+    console.error('❌ Error handling message:', error.message);
+  }
+}
 
     // =============================================
   // 🤖 HANDLE AI MENTION - WITH TAGGING SUPPORT
@@ -1203,13 +1238,13 @@ if (sender && !sender.includes(botNumber) && !sender.includes(lidNumber)) {
         // ✅ Send with mentions (both mentioned user AND sender)
         await this.sendToSpecificGroup(from, aiResponse, msg, userJids);
       } else {
-        await this.sendToSpecificGroup(from, '🙏 Sorry, I had trouble processing that. Please try again.');
+        await this.sendToSpecificGroup(from, '🙏 ');
       }
       
     } catch (error) {
       console.error('❌ AI mention error:', error);
       try {
-        await this.sendToSpecificGroup(from, '🙏 Sorry, I had trouble processing that. Please try again.');
+        await this.sendToSpecificGroup(from, '🙏 ');
       } catch (e) {
         console.error('❌ Failed to send error response:', e.message);
       }
