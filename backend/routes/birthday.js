@@ -51,7 +51,7 @@ router.put("/settings", authenticate, requireAdmin, async (req, res) => {
           autoCreateAdvert: autoCreateAdvert !== undefined ? autoCreateAdvert : true,
           sendPushToAll: sendPushToAll !== undefined ? sendPushToAll : true,
           sendToWhatsApp: sendToWhatsApp !== undefined ? sendToWhatsApp : false,
-            whatsAppMessage: whatsAppMessage || "Today we celebrate one of our own. 🎉\n\nLet us all join in wishing {name} a happy, blessed, and cheerful birthday.\n\nHappy Birthday, {name}! 🎂✨\n\nFrom all of us at ZUCA ❤️",
+          whatsAppMessage: whatsAppMessage || "Today we celebrate one of our own. 🎉\n\nLet us all join in wishing {name} a happy, blessed, and cheerful birthday.\n\nHappy Birthday, {name}! 🎂✨\n\nFrom all of us at ZUCA ❤️",
           updatedBy: req.user.userId
         }
       });
@@ -200,6 +200,7 @@ router.get("/admin/today", authenticate, requireAdmin, async (req, res) => {
         fullName: true,
         email: true,
         phone: true,
+        profileImage: true,
         birthdayPhoto: true,
         birthdayMessage: true,
         birthdayAdvertId: true,
@@ -294,7 +295,6 @@ router.post("/admin/process/:userId", authenticate, requireAdmin, async (req, re
     const settings = await prisma.birthdaySetting.findFirst();
 
     let advert = null;
-    // ✅ Use original photo directly - NO image generation
     const imageUrl = user.birthdayPhoto;
 
     if (settings?.autoCreateAdvert !== false) {
@@ -320,7 +320,7 @@ router.post("/admin/process/:userId", authenticate, requireAdmin, async (req, re
       });
     }
 
-    // ✅ SEND TO WHATSAPP
+    // SEND TO WHATSAPP
     if (settings?.sendToWhatsApp && imageUrl) {
       try {
         const whatsappBot = require("../services/whatsapp.bot");
@@ -400,7 +400,6 @@ router.post("/admin/process-all", authenticate, requireAdmin, async (req, res) =
     for (const user of users) {
       try {
         let advert = null;
-        // ✅ Use original photo directly - NO image generation
         const imageUrl = user.birthdayPhoto;
 
         if (settings?.autoCreateAdvert !== false) {
@@ -426,7 +425,7 @@ router.post("/admin/process-all", authenticate, requireAdmin, async (req, res) =
           });
         }
 
-        // ✅ SEND TO WHATSAPP
+        // SEND TO WHATSAPP
         if (settings?.sendToWhatsApp && imageUrl) {
           try {
             const activeGroups = await prisma.whatsAppGroup.findMany({
@@ -474,7 +473,7 @@ router.post("/admin/process-all", authenticate, requireAdmin, async (req, res) =
 });
 
 // =============================================
-// ADMIN: GET ALL BIRTHDAYS (OPTED IN)
+// ADMIN: GET ALL BIRTHDAYS (OPTED IN) - FIXED
 // =============================================
 router.get("/admin/all", authenticate, requireAdmin, async (req, res) => {
   try {
@@ -487,9 +486,11 @@ router.get("/admin/all", authenticate, requireAdmin, async (req, res) => {
         fullName: true,
         email: true,
         phone: true,
+        profileImage: true,        // ✅ Added - profile picture
         birthdayPhoto: true,
         birthdayMessage: true,
         birthdayAdvertId: true,
+        birthDate: true,           // ✅ Added - FULL birth date
         birthMonth: true,
         birthDay: true,
         role: true,
@@ -512,8 +513,6 @@ router.get("/admin/all", authenticate, requireAdmin, async (req, res) => {
 // =============================================
 // BIRTHDAY WHATSAPP GROUPS - SAVE SELECTION
 // =============================================
-
-// Save selected groups for birthday messages
 router.post("/whatsapp-groups/save", authenticate, requireAdmin, async (req, res) => {
   try {
     const { selectedGroupIds } = req.body;
@@ -522,22 +521,16 @@ router.post("/whatsapp-groups/save", authenticate, requireAdmin, async (req, res
       return res.status(400).json({ error: "selectedGroupIds array required" });
     }
     
-    // Get current state of all groups
     const currentGroups = await prisma.whatsAppGroup.findMany({
       select: { groupId: true, isActive: true }
     });
     
-    // Find what changed
     const currentActiveIds = currentGroups.filter(g => g.isActive).map(g => g.groupId);
     const newActiveIds = selectedGroupIds;
     
-    // Groups to activate (in selected but not currently active)
     const toActivate = newActiveIds.filter(id => !currentActiveIds.includes(id));
-    
-    // Groups to deactivate (currently active but not selected)
     const toDeactivate = currentActiveIds.filter(id => !newActiveIds.includes(id));
     
-    // Only run updates if there are changes
     if (toActivate.length > 0) {
       await prisma.whatsAppGroup.updateMany({
         where: { groupId: { in: toActivate } },
@@ -577,6 +570,267 @@ router.get("/whatsapp-groups", authenticate, requireAdmin, async (req, res) => {
     res.json({ success: true, groups });
   } catch (error) {
     console.error("Get WhatsApp groups error:", error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// =============================================
+// ADMIN: CREATE/UPDATE USER BIRTHDAY (ADMIN ONLY)
+// =============================================
+router.post("/admin/user/:userId", authenticate, requireAdmin, async (req, res) => {
+  try {
+    const { userId } = req.params;
+    const { birthdayOptIn, birthDate, birthdayMessage, birthdayPhoto } = req.body;
+
+    const existingUser = await prisma.user.findUnique({
+      where: { id: userId }
+    });
+
+    if (!existingUser) {
+      return res.status(404).json({ error: "User not found" });
+    }
+
+    let data = {};
+
+    if (birthdayOptIn !== undefined) {
+      data.birthdayOptIn = birthdayOptIn;
+    }
+
+    if (birthDate) {
+      const date = new Date(birthDate);
+      data.birthDate = date;
+      data.birthMonth = date.getMonth() + 1;
+      data.birthDay = date.getDate();
+    }
+
+    if (birthdayMessage !== undefined) {
+      data.birthdayMessage = birthdayMessage;
+    }
+
+    if (birthdayPhoto !== undefined) {
+      data.birthdayPhoto = birthdayPhoto;
+    }
+
+    const user = await prisma.user.update({
+      where: { id: userId },
+      data,
+      select: {
+        id: true,
+        fullName: true,
+        email: true,
+        phone: true,
+        birthdayOptIn: true,
+        birthDate: true,
+        birthMonth: true,
+        birthDay: true,
+        birthdayPhoto: true,
+        birthdayMessage: true,
+        birthdayAdvertId: true,
+        profileImage: true,
+        role: true,
+        homeJumuia: {
+          select: { name: true }
+        }
+      }
+    });
+
+    res.json({
+      success: true,
+      message: `Birthday settings updated for ${user.fullName}`,
+      user
+    });
+  } catch (error) {
+    console.error("Admin update birthday error:", error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// =============================================
+// ADMIN: GET ALL USERS (FOR BIRTHDAY MANAGEMENT) - FIXED
+// =============================================
+router.get("/admin/users", authenticate, requireAdmin, async (req, res) => {
+  try {
+    const { search, page = 1, limit = 20 } = req.query;
+    
+    const where = {};
+    
+    if (search) {
+      where.OR = [
+        { fullName: { contains: search, mode: 'insensitive' } },
+        { email: { contains: search, mode: 'insensitive' } },
+        { membership_number: { contains: search, mode: 'insensitive' } }
+      ];
+    }
+
+    const users = await prisma.user.findMany({
+      where,
+      select: {
+        id: true,
+        fullName: true,
+        email: true,
+        phone: true,
+        membership_number: true,
+        profileImage: true,        // ✅ Profile picture
+        birthdayOptIn: true,
+        birthDate: true,           // ✅ Full birth date
+        birthMonth: true,
+        birthDay: true,
+        birthdayPhoto: true,       // ✅ Only once (removed duplicate)
+        birthdayMessage: true,
+        birthdayAdvertId: true,
+        role: true,
+        homeJumuia: {
+          select: { name: true }
+        }
+      },
+      orderBy: { fullName: 'asc' },
+      skip: (parseInt(page) - 1) * parseInt(limit),
+      take: parseInt(limit)
+    });
+
+    const total = await prisma.user.count({ where });
+
+    res.json({
+      success: true,
+      users,
+      total,
+      page: parseInt(page),
+      totalPages: Math.ceil(total / parseInt(limit))
+    });
+  } catch (error) {
+    console.error("Get users for admin error:", error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// =============================================
+// ADMIN: GET USER BY ID (FOR EDITING)
+// =============================================
+router.get("/admin/user/:userId", authenticate, requireAdmin, async (req, res) => {
+  try {
+    const { userId } = req.params;
+
+    const user = await prisma.user.findUnique({
+      where: { id: userId },
+      select: {
+        id: true,
+        fullName: true,
+        email: true,
+        phone: true,
+        membership_number: true,
+        profileImage: true,
+        birthdayOptIn: true,
+        birthDate: true,
+        birthMonth: true,
+        birthDay: true,
+        birthdayPhoto: true,
+        birthdayMessage: true,
+        birthdayAdvertId: true,
+        role: true,
+        homeJumuia: {
+          select: { name: true }
+        }
+      }
+    });
+
+    if (!user) {
+      return res.status(404).json({ error: "User not found" });
+    }
+
+    res.json({ success: true, user });
+  } catch (error) {
+    console.error("Get user error:", error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// =============================================
+// ADMIN: UPLOAD BIRTHDAY PHOTO FOR USER
+// =============================================
+router.post("/admin/upload-photo/:userId", authenticate, requireAdmin, upload.single("photo"), async (req, res) => {
+  try {
+    if (!req.file) {
+      return res.status(400).json({ error: "No photo uploaded" });
+    }
+
+    const { userId } = req.params;
+
+    const existingUser = await prisma.user.findUnique({
+      where: { id: userId }
+    });
+
+    if (!existingUser) {
+      return res.status(404).json({ error: "User not found" });
+    }
+
+    const result = await new Promise((resolve, reject) => {
+      const stream = cloudinary.uploader.upload_stream(
+        {
+          folder: "zuca/birthday_photos",
+          public_id: `birthday_${userId}_${Date.now()}`,
+          resource_type: "image"
+        },
+        (error, result) => {
+          if (error) reject(error);
+          else resolve(result);
+        }
+      );
+      stream.end(req.file.buffer);
+    });
+
+    const user = await prisma.user.update({
+      where: { id: userId },
+      data: { birthdayPhoto: result.secure_url },
+      select: {
+        id: true,
+        fullName: true,
+        email: true,
+        birthdayOptIn: true,
+        birthDate: true,
+        birthMonth: true,
+        birthDay: true,
+        birthdayPhoto: true,
+        birthdayMessage: true,
+        profileImage: true
+      }
+    });
+
+    res.json({
+      success: true,
+      photoUrl: result.secure_url,
+      user,
+      message: `Photo uploaded for ${user.fullName}`
+    });
+  } catch (error) {
+    console.error("Admin upload photo error:", error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// =============================================
+// ADMIN: REMOVE USER BIRTHDAY PHOTO
+// =============================================
+router.delete("/admin/photo/:userId", authenticate, requireAdmin, async (req, res) => {
+  try {
+    const { userId } = req.params;
+
+    const user = await prisma.user.update({
+      where: { id: userId },
+      data: { birthdayPhoto: null },
+      select: {
+        id: true,
+        fullName: true,
+        birthdayPhoto: true
+      }
+    });
+
+    res.json({
+      success: true,
+      user,
+      message: `Photo removed for ${user.fullName}`
+    });
+  } catch (error) {
+    console.error("Admin remove photo error:", error);
     res.status(500).json({ error: error.message });
   }
 });
