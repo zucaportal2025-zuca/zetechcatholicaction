@@ -15,6 +15,19 @@ cloudinary.config({
 const upload = multer({ storage: multer.memoryStorage() });
 
 // =============================================
+// HELPER: GET BIRTHDAY MESSAGE
+// =============================================
+function getBirthdayMessage(fullName) {
+  return `Today we celebrate one of our own. 🎉
+
+Let us all join in wishing ${fullName} a happy, blessed, and cheerful birthday.
+
+Happy Birthday, ${fullName}! 🎂✨
+
+From all of us at ZUCA ❤️`;
+}
+
+// =============================================
 // GET BIRTHDAY SETTINGS
 // =============================================
 router.get("/settings", authenticate, requireAdmin, async (req, res) => {
@@ -270,7 +283,7 @@ router.get("/admin/stats", authenticate, requireAdmin, async (req, res) => {
 });
 
 // =============================================
-// ADMIN: PROCESS SINGLE BIRTHDAY
+// ADMIN: PROCESS SINGLE BIRTHDAY - UPDATED
 // =============================================
 router.post("/admin/process/:userId", authenticate, requireAdmin, async (req, res) => {
   try {
@@ -297,11 +310,14 @@ router.post("/admin/process/:userId", authenticate, requireAdmin, async (req, re
     let advert = null;
     const imageUrl = user.birthdayPhoto;
 
+    // ✅ Get the formatted birthday message
+    const birthdayDescription = getBirthdayMessage(user.fullName);
+
     if (settings?.autoCreateAdvert !== false) {
       advert = await prisma.advertisement.create({
         data: {
-          title: `Happy Birthday, ${user.fullName}!`,
-          description: `Today we celebrate ${user.fullName}'s special day. Join us in wishing them a blessed year ahead.`,
+          title: `Happy Birthday, ${user.fullName}! 🎂`,
+          description: birthdayDescription,
           image: imageUrl,
           startDate: new Date(),
           endDate: new Date(Date.now() + 24 * 60 * 60 * 1000),
@@ -329,7 +345,8 @@ router.post("/admin/process/:userId", authenticate, requireAdmin, async (req, re
         });
 
         if (activeGroups.length > 0) {
-          const message = (settings.whatsAppMessage || "Happy Birthday {name}!").replace(/{name}/g, user.fullName);
+          // ✅ Use the same formatted message
+          const message = (settings.whatsAppMessage || birthdayDescription).replace(/{name}/g, user.fullName);
 
           let whatsappSent = 0;
           for (const group of activeGroups) {
@@ -367,7 +384,7 @@ router.post("/admin/process/:userId", authenticate, requireAdmin, async (req, re
 });
 
 // =============================================
-// ADMIN: PROCESS ALL TODAY'S BIRTHDAYS
+// ADMIN: PROCESS ALL TODAY'S BIRTHDAYS - UPDATED
 // =============================================
 router.post("/admin/process-all", authenticate, requireAdmin, async (req, res) => {
   try {
@@ -402,11 +419,14 @@ router.post("/admin/process-all", authenticate, requireAdmin, async (req, res) =
         let advert = null;
         const imageUrl = user.birthdayPhoto;
 
+        // ✅ Get the formatted birthday message
+        const birthdayDescription = getBirthdayMessage(user.fullName);
+
         if (settings?.autoCreateAdvert !== false) {
           advert = await prisma.advertisement.create({
             data: {
-              title: `Happy Birthday, ${user.fullName}!`,
-              description: `Today we celebrate ${user.fullName}'s special day. Join us in wishing them a blessed year ahead.`,
+              title: `Happy Birthday, ${user.fullName}! 🎂`,
+              description: birthdayDescription,
               image: imageUrl,
               startDate: new Date(),
               endDate: new Date(Date.now() + 24 * 60 * 60 * 1000),
@@ -433,7 +453,8 @@ router.post("/admin/process-all", authenticate, requireAdmin, async (req, res) =
             });
 
             if (activeGroups.length > 0) {
-              const message = (settings.whatsAppMessage || "Happy Birthday {name}!").replace(/{name}/g, user.fullName);
+              // ✅ Use the same formatted message
+              const message = (settings.whatsAppMessage || birthdayDescription).replace(/{name}/g, user.fullName);
 
               for (const group of activeGroups) {
                 try {
@@ -473,7 +494,7 @@ router.post("/admin/process-all", authenticate, requireAdmin, async (req, res) =
 });
 
 // =============================================
-// ADMIN: GET ALL BIRTHDAYS (OPTED IN) - FIXED
+// ADMIN: GET ALL BIRTHDAYS (OPTED IN)
 // =============================================
 router.get("/admin/all", authenticate, requireAdmin, async (req, res) => {
   try {
@@ -486,11 +507,11 @@ router.get("/admin/all", authenticate, requireAdmin, async (req, res) => {
         fullName: true,
         email: true,
         phone: true,
-        profileImage: true,        // ✅ Added - profile picture
+        profileImage: true,
         birthdayPhoto: true,
         birthdayMessage: true,
         birthdayAdvertId: true,
-        birthDate: true,           // ✅ Added - FULL birth date
+        birthDate: true,
         birthMonth: true,
         birthDay: true,
         role: true,
@@ -646,7 +667,7 @@ router.post("/admin/user/:userId", authenticate, requireAdmin, async (req, res) 
 });
 
 // =============================================
-// ADMIN: GET ALL USERS (FOR BIRTHDAY MANAGEMENT) - FIXED
+// ADMIN: GET ALL USERS (FOR BIRTHDAY MANAGEMENT)
 // =============================================
 router.get("/admin/users", authenticate, requireAdmin, async (req, res) => {
   try {
@@ -670,12 +691,12 @@ router.get("/admin/users", authenticate, requireAdmin, async (req, res) => {
         email: true,
         phone: true,
         membership_number: true,
-        profileImage: true,        // ✅ Profile picture
+        profileImage: true,
         birthdayOptIn: true,
-        birthDate: true,           // ✅ Full birth date
+        birthDate: true,
         birthMonth: true,
         birthDay: true,
-        birthdayPhoto: true,       // ✅ Only once (removed duplicate)
+        birthdayPhoto: true,
         birthdayMessage: true,
         birthdayAdvertId: true,
         role: true,
