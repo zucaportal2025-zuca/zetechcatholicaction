@@ -856,4 +856,184 @@ router.delete("/admin/photo/:userId", authenticate, requireAdmin, async (req, re
   }
 });
 
+// =============================================
+// ADMIN: DELETE USER BIRTHDAY (Admin Only)
+// =============================================
+router.delete("/admin/user/:userId", authenticate, requireAdmin, async (req, res) => {
+  try {
+    const { userId } = req.params;
+
+    const existingUser = await prisma.user.findUnique({
+      where: { id: userId }
+    });
+
+    if (!existingUser) {
+      return res.status(404).json({ error: "User not found" });
+    }
+
+    // If user has a birthday advert, delete it first
+    if (existingUser.birthdayAdvertId) {
+      await prisma.advertisement.delete({
+        where: { id: existingUser.birthdayAdvertId }
+      });
+    }
+
+    // Reset all birthday-related fields
+    const user = await prisma.user.update({
+      where: { id: userId },
+      data: {
+        birthdayOptIn: false,
+        birthDate: null,
+        birthMonth: null,
+        birthDay: null,
+        birthdayPhoto: null,
+        birthdayMessage: null,
+        birthdayAdvertId: null
+      },
+      select: {
+        id: true,
+        fullName: true,
+        email: true,
+        birthdayOptIn: true,
+        birthDate: true,
+        birthdayPhoto: true,
+        birthdayMessage: true
+      }
+    });
+
+    res.json({
+      success: true,
+      message: `Birthday data cleared for ${user.fullName}`,
+      user
+    });
+  } catch (error) {
+    console.error("Admin delete birthday error:", error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// =============================================
+// ADMIN: TOGGLE BIRTHDAY OPT-IN (Admin Only)
+// =============================================
+router.patch("/admin/user/:userId/toggle-optin", authenticate, requireAdmin, async (req, res) => {
+  try {
+    const { userId } = req.params;
+    const { birthdayOptIn } = req.body;
+
+    const existingUser = await prisma.user.findUnique({
+      where: { id: userId }
+    });
+
+    if (!existingUser) {
+      return res.status(404).json({ error: "User not found" });
+    }
+
+    const user = await prisma.user.update({
+      where: { id: userId },
+      data: { birthdayOptIn },
+      select: {
+        id: true,
+        fullName: true,
+        email: true,
+        birthdayOptIn: true,
+        birthDate: true,
+        birthdayPhoto: true,
+        birthdayMessage: true
+      }
+    });
+
+    res.json({
+      success: true,
+      message: `Birthday opt-in ${birthdayOptIn ? 'enabled' : 'disabled'} for ${user.fullName}`,
+      user
+    });
+  } catch (error) {
+    console.error("Admin toggle opt-in error:", error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// =============================================
+// ADMIN: GET BIRTHDAY STATS WITH USER COUNT (Admin Only)
+// =============================================
+router.get("/admin/stats/detailed", authenticate, requireAdmin, async (req, res) => {
+  try {
+    const totalOptedIn = await prisma.user.count({
+      where: { birthdayOptIn: true }
+    });
+
+    const totalWithPhoto = await prisma.user.count({
+      where: {
+        birthdayOptIn: true,
+        birthdayPhoto: { not: null }
+      }
+    });
+
+    const totalWithMessage = await prisma.user.count({
+      where: {
+        birthdayOptIn: true,
+        birthdayMessage: { not: null }
+      }
+    });
+
+    const totalBirthdayAds = await prisma.advertisement.count({
+      where: {
+        birthdayUser: { isNot: null }
+      }
+    });
+
+    const today = new Date();
+    const month = today.getMonth() + 1;
+    const day = today.getDate();
+
+    const todayBirthdays = await prisma.user.count({
+      where: {
+        birthdayOptIn: true,
+        birthMonth: month,
+        birthDay: day
+      }
+    });
+
+    // Get upcoming birthdays (next 7 days)
+    const upcomingBirthdays = await prisma.user.findMany({
+      where: {
+        birthdayOptIn: true,
+        birthdayPhoto: { not: null }
+      },
+      select: {
+        id: true,
+        fullName: true,
+        birthMonth: true,
+        birthDay: true,
+        birthdayPhoto: true
+      }
+    });
+
+    // Filter upcoming birthdays
+    const upcoming = upcomingBirthdays.filter(user => {
+      const birthDate = new Date();
+      birthDate.setMonth(user.birthMonth - 1);
+      birthDate.setDate(user.birthDay);
+      const diffDays = Math.ceil((birthDate - today) / (1000 * 60 * 60 * 24));
+      return diffDays > 0 && diffDays <= 7;
+    });
+
+    res.json({
+      success: true,
+      stats: {
+        totalOptedIn,
+        totalWithPhoto,
+        totalWithMessage,
+        totalBirthdayAds,
+        todayBirthdays,
+        upcomingBirthdays: upcoming.length,
+        upcomingUsers: upcoming.slice(0, 5)
+      }
+    });
+  } catch (error) {
+    console.error("Get detailed birthday stats error:", error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
 module.exports = router;
