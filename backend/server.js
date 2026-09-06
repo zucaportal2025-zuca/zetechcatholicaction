@@ -2082,7 +2082,7 @@ app.post("/api/cron/check", async (req, res) => {
     executed.push("event_reminders");
 
      // ========== BIRTHDAY ADVERTS - DAILY AT 8:00 AM ==========
-    if (hour === 8 && minute < 5) {
+    if (hour === 6 && minute < 5) {
       console.log("🎂 Running birthday advert check...");
       await processBirthdayAdverts();
       executed.push("birthday_adverts");
