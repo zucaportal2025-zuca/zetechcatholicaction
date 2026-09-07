@@ -1669,6 +1669,10 @@ app.use('/api/advertisements', advertisementRoutes);
 const birthdayRoutes = require("./routes/birthday");
 app.use("/api/birthday", birthdayRoutes);
 
+//choir WhatsApp routes
+const choirWhatsappRoutes = require("./routes/choir-whatsapp");
+app.use("/api/choir/whatsapp", choirWhatsappRoutes);
+
 
 // ================== IMPROVED PROXY ROUTES (WITH BETTER ERROR HANDLING) ==================
 
