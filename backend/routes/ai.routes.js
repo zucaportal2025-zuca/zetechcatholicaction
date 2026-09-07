@@ -5,9 +5,25 @@ const { authenticate, requireAdmin } = require('../middleware/auth');
 const { chatWithGroq } = require('../services/deepseek/deepseekClient');
 
 // =============================================
-// 🤖 AI MESSAGE POLISHING
+// 🤖 AI MESSAGE POLISHING - Allow Admin & Choir Moderator
 // =============================================
-router.post('/polish-message', authenticate, requireAdmin, async (req, res) => {
+
+// Middleware to check if user is admin OR choir moderator
+const isAdminOrChoirModerator = (req, res, next) => {
+  if (!req.user) {
+    return res.status(401).json({ error: "Authentication required" });
+  }
+
+  const role = req.user.specialRole || req.user.role;
+  
+  if (role === "admin" || role === "choir_moderator") {
+    return next();
+  }
+
+  return res.status(403).json({ error: "Access denied. Admin or Choir Moderator only." });
+};
+
+router.post('/polish-message', authenticate, isAdminOrChoirModerator, async (req, res) => {
   try {
     const { message, tone, type } = req.body;
     
@@ -46,7 +62,7 @@ IMPORTANT RULES:
 5. Keep it under 1000 characters
 6. For announcements: include a clear subject line and call to action
 7. For prayers: use reverent language
-8. ALWAYS end with: "Tumsifu Yesu Kristu! 🙏"
+
 
 Return ONLY the polished message, no explanations or additional text.`;
 
