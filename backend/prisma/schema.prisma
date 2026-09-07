@@ -2107,3 +2107,13 @@ model ChoirBroadcastSetting {
 
   @@map("choir_broadcast_setting")
 }
+
+
+model BirthdayWhatsAppSetting {
+  id               String   @id @default(cuid())
+  selectedGroupIds Json     // Array of group IDs for birthday messages
+  updatedAt        DateTime @updatedAt
+  updatedBy        String?  // Who last updated it
+
+  @@map("birthday_whatsapp_settings")
+}

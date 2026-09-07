@@ -14,9 +14,6 @@ cloudinary.config({
 
 const upload = multer({ storage: multer.memoryStorage() });
 
-// =============================================
-// HELPER: GET BIRTHDAY MESSAGE
-// =============================================
 function getBirthdayMessage(fullName) {
   return `Today we celebrate one of our own. 🎉
 
@@ -27,9 +24,6 @@ Happy Birthday, ${fullName}! 🎂✨
 From all of us at ZUCA ❤️`;
 }
 
-// =============================================
-// GET BIRTHDAY SETTINGS
-// =============================================
 router.get("/settings", authenticate, requireAdmin, async (req, res) => {
   try {
     let settings = await prisma.birthdaySetting.findFirst();
@@ -50,9 +44,6 @@ router.get("/settings", authenticate, requireAdmin, async (req, res) => {
   }
 });
 
-// =============================================
-// UPDATE BIRTHDAY SETTINGS
-// =============================================
 router.put("/settings", authenticate, requireAdmin, async (req, res) => {
   try {
     const { autoCreateAdvert, sendPushToAll, sendToWhatsApp, whatsAppMessage } = req.body;
@@ -89,9 +80,6 @@ router.put("/settings", authenticate, requireAdmin, async (req, res) => {
   }
 });
 
-// =============================================
-// USER: UPDATE BIRTHDAY SETTINGS
-// =============================================
 router.put("/user-settings", authenticate, async (req, res) => {
   try {
     const { birthdayOptIn, birthDate, birthdayMessage } = req.body;
@@ -138,9 +126,6 @@ router.put("/user-settings", authenticate, async (req, res) => {
   }
 });
 
-// =============================================
-// USER: UPLOAD BIRTHDAY PHOTO
-// =============================================
 router.post("/upload-photo", authenticate, upload.single("photo"), async (req, res) => {
   try {
     if (!req.file) {
@@ -192,9 +177,6 @@ router.post("/upload-photo", authenticate, upload.single("photo"), async (req, r
   }
 });
 
-// =============================================
-// ADMIN: GET TODAY'S BIRTHDAYS
-// =============================================
 router.get("/admin/today", authenticate, requireAdmin, async (req, res) => {
   try {
     const today = new Date();
@@ -233,9 +215,6 @@ router.get("/admin/today", authenticate, requireAdmin, async (req, res) => {
   }
 });
 
-// =============================================
-// ADMIN: GET BIRTHDAY STATS
-// =============================================
 router.get("/admin/stats", authenticate, requireAdmin, async (req, res) => {
   try {
     const totalOptedIn = await prisma.user.count({
@@ -282,9 +261,6 @@ router.get("/admin/stats", authenticate, requireAdmin, async (req, res) => {
   }
 });
 
-// =============================================
-// ADMIN: PROCESS SINGLE BIRTHDAY - UPDATED
-// =============================================
 router.post("/admin/process/:userId", authenticate, requireAdmin, async (req, res) => {
   try {
     const { userId } = req.params;
@@ -309,8 +285,6 @@ router.post("/admin/process/:userId", authenticate, requireAdmin, async (req, re
 
     let advert = null;
     const imageUrl = user.birthdayPhoto;
-
-    // ✅ Get the formatted birthday message
     const birthdayDescription = getBirthdayMessage(user.fullName);
 
     if (settings?.autoCreateAdvert !== false) {
@@ -336,36 +310,36 @@ router.post("/admin/process/:userId", authenticate, requireAdmin, async (req, re
       });
     }
 
-    // SEND TO WHATSAPP
     if (settings?.sendToWhatsApp && imageUrl) {
       try {
         const whatsappBot = require("../services/whatsapp.bot");
-        const activeGroups = await prisma.whatsAppGroup.findMany({
-          where: { isActive: true }
-        });
+        const birthdayWhatsAppSettings = await prisma.birthdayWhatsAppSetting.findFirst();
+        const selectedGroupIds = birthdayWhatsAppSettings?.selectedGroupIds || [];
 
-        if (activeGroups.length > 0) {
-          // ✅ Use the same formatted message
-          const message = (settings.whatsAppMessage || birthdayDescription).replace(/{name}/g, user.fullName);
+        if (selectedGroupIds.length > 0) {
+          const groups = await prisma.whatsAppGroup.findMany({
+            where: {
+              groupId: { in: selectedGroupIds }
+            }
+          });
 
-          let whatsappSent = 0;
-          for (const group of activeGroups) {
-            try {
-              if (whatsappBot.sock && whatsappBot.isConnected) {
-                await whatsappBot.sock.sendMessage(group.groupId, {
-                  image: { url: imageUrl },
-                  caption: message
-                });
-                whatsappSent++;
-                console.log(`WhatsApp sent to ${group.groupName || group.groupId}`);
+          if (groups.length > 0) {
+            const message = (settings.whatsAppMessage || birthdayDescription).replace(/{name}/g, user.fullName);
+
+            for (const group of groups) {
+              try {
+                if (whatsappBot.sock && whatsappBot.isConnected) {
+                  await whatsappBot.sock.sendMessage(group.groupId, {
+                    image: { url: imageUrl },
+                    caption: message
+                  });
+                  console.log(`Birthday WhatsApp sent to ${group.groupName || group.groupId}`);
+                }
+              } catch (err) {
+                console.error(`Failed to send to ${group.groupId}:`, err.message);
               }
-            } catch (err) {
-              console.error(`Failed to send to ${group.groupId}:`, err.message);
             }
           }
-          console.log(`WhatsApp sent to ${whatsappSent} groups`);
-        } else {
-          console.log("No active WhatsApp groups found");
         }
       } catch (err) {
         console.error("WhatsApp send failed:", err.message);
@@ -383,9 +357,6 @@ router.post("/admin/process/:userId", authenticate, requireAdmin, async (req, re
   }
 });
 
-// =============================================
-// ADMIN: PROCESS ALL TODAY'S BIRTHDAYS - UPDATED
-// =============================================
 router.post("/admin/process-all", authenticate, requireAdmin, async (req, res) => {
   try {
     const today = new Date();
@@ -418,8 +389,6 @@ router.post("/admin/process-all", authenticate, requireAdmin, async (req, res) =
       try {
         let advert = null;
         const imageUrl = user.birthdayPhoto;
-
-        // ✅ Get the formatted birthday message
         const birthdayDescription = getBirthdayMessage(user.fullName);
 
         if (settings?.autoCreateAdvert !== false) {
@@ -445,28 +414,33 @@ router.post("/admin/process-all", authenticate, requireAdmin, async (req, res) =
           });
         }
 
-        // SEND TO WHATSAPP
         if (settings?.sendToWhatsApp && imageUrl) {
           try {
-            const activeGroups = await prisma.whatsAppGroup.findMany({
-              where: { isActive: true }
-            });
+            const birthdayWhatsAppSettings = await prisma.birthdayWhatsAppSetting.findFirst();
+            const selectedGroupIds = birthdayWhatsAppSettings?.selectedGroupIds || [];
 
-            if (activeGroups.length > 0) {
-              // ✅ Use the same formatted message
-              const message = (settings.whatsAppMessage || birthdayDescription).replace(/{name}/g, user.fullName);
+            if (selectedGroupIds.length > 0) {
+              const groups = await prisma.whatsAppGroup.findMany({
+                where: {
+                  groupId: { in: selectedGroupIds }
+                }
+              });
 
-              for (const group of activeGroups) {
-                try {
-                  if (whatsappBot.sock && whatsappBot.isConnected) {
-                    await whatsappBot.sock.sendMessage(group.groupId, {
-                      image: { url: imageUrl },
-                      caption: message
-                    });
-                    console.log(`WhatsApp sent to ${group.groupName || group.groupId}`);
+              if (groups.length > 0) {
+                const message = (settings.whatsAppMessage || birthdayDescription).replace(/{name}/g, user.fullName);
+
+                for (const group of groups) {
+                  try {
+                    if (whatsappBot.sock && whatsappBot.isConnected) {
+                      await whatsappBot.sock.sendMessage(group.groupId, {
+                        image: { url: imageUrl },
+                        caption: message
+                      });
+                      console.log(`Birthday WhatsApp sent to ${group.groupName || group.groupId}`);
+                    }
+                  } catch (err) {
+                    console.error(`Failed to send to ${group.groupId}:`, err.message);
                   }
-                } catch (err) {
-                  console.error(`Failed to send to ${group.groupId}:`, err.message);
                 }
               }
             }
@@ -493,9 +467,6 @@ router.post("/admin/process-all", authenticate, requireAdmin, async (req, res) =
   }
 });
 
-// =============================================
-// ADMIN: GET ALL BIRTHDAYS (OPTED IN)
-// =============================================
 router.get("/admin/all", authenticate, requireAdmin, async (req, res) => {
   try {
     const users = await prisma.user.findMany({
@@ -531,57 +502,6 @@ router.get("/admin/all", authenticate, requireAdmin, async (req, res) => {
   }
 });
 
-// =============================================
-// BIRTHDAY WHATSAPP GROUPS - SAVE SELECTION
-// =============================================
-router.post("/whatsapp-groups/save", authenticate, requireAdmin, async (req, res) => {
-  try {
-    const { selectedGroupIds } = req.body;
-    
-    if (!selectedGroupIds || !Array.isArray(selectedGroupIds)) {
-      return res.status(400).json({ error: "selectedGroupIds array required" });
-    }
-    
-    const currentGroups = await prisma.whatsAppGroup.findMany({
-      select: { groupId: true, isActive: true }
-    });
-    
-    const currentActiveIds = currentGroups.filter(g => g.isActive).map(g => g.groupId);
-    const newActiveIds = selectedGroupIds;
-    
-    const toActivate = newActiveIds.filter(id => !currentActiveIds.includes(id));
-    const toDeactivate = currentActiveIds.filter(id => !newActiveIds.includes(id));
-    
-    if (toActivate.length > 0) {
-      await prisma.whatsAppGroup.updateMany({
-        where: { groupId: { in: toActivate } },
-        data: { isActive: true }
-      });
-    }
-    
-    if (toDeactivate.length > 0) {
-      await prisma.whatsAppGroup.updateMany({
-        where: { groupId: { in: toDeactivate } },
-        data: { isActive: false }
-      });
-    }
-    
-    res.json({ 
-      success: true, 
-      message: `WhatsApp groups updated (${toActivate.length} activated, ${toDeactivate.length} deactivated)`,
-      activated: toActivate.length,
-      deactivated: toDeactivate.length
-    });
-    
-  } catch (error) {
-    console.error("Save WhatsApp groups error:", error);
-    res.status(500).json({ error: error.message });
-  }
-});
-
-// =============================================
-// GET WHATSAPP GROUPS
-// =============================================
 router.get("/whatsapp-groups", authenticate, requireAdmin, async (req, res) => {
   try {
     const groups = await prisma.whatsAppGroup.findMany({
@@ -595,9 +515,65 @@ router.get("/whatsapp-groups", authenticate, requireAdmin, async (req, res) => {
   }
 });
 
-// =============================================
-// ADMIN: CREATE/UPDATE USER BIRTHDAY (ADMIN ONLY)
-// =============================================
+router.post("/birthday-whatsapp/save", authenticate, requireAdmin, async (req, res) => {
+  try {
+    const { selectedGroupIds } = req.body;
+    const userId = req.user.userId;
+    
+    if (!selectedGroupIds || !Array.isArray(selectedGroupIds)) {
+      return res.status(400).json({ error: "selectedGroupIds array required" });
+    }
+
+    const user = await prisma.user.findUnique({
+      where: { id: userId },
+      select: { fullName: true }
+    });
+
+    let settings = await prisma.birthdayWhatsAppSetting.findFirst();
+
+    if (settings) {
+      settings = await prisma.birthdayWhatsAppSetting.update({
+        where: { id: settings.id },
+        data: {
+          selectedGroupIds: selectedGroupIds,
+          updatedBy: user?.fullName || userId
+        }
+      });
+    } else {
+      settings = await prisma.birthdayWhatsAppSetting.create({
+        data: {
+          selectedGroupIds: selectedGroupIds,
+          updatedBy: user?.fullName || userId
+        }
+      });
+    }
+
+    res.json({
+      success: true,
+      message: "Birthday WhatsApp groups updated successfully",
+      settings
+    });
+  } catch (error) {
+    console.error("Save birthday WhatsApp groups error:", error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+router.get("/birthday-whatsapp/settings", authenticate, requireAdmin, async (req, res) => {
+  try {
+    const settings = await prisma.birthdayWhatsAppSetting.findFirst();
+
+    res.json({
+      success: true,
+      settings: settings || { selectedGroupIds: [] },
+      updatedBy: settings?.updatedBy || null
+    });
+  } catch (error) {
+    console.error("Get birthday WhatsApp settings error:", error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
 router.post("/admin/user/:userId", authenticate, requireAdmin, async (req, res) => {
   try {
     const { userId } = req.params;
@@ -666,9 +642,6 @@ router.post("/admin/user/:userId", authenticate, requireAdmin, async (req, res) 
   }
 });
 
-// =============================================
-// ADMIN: GET ALL USERS (FOR BIRTHDAY MANAGEMENT)
-// =============================================
 router.get("/admin/users", authenticate, requireAdmin, async (req, res) => {
   try {
     const { search, page = 1, limit = 20 } = req.query;
@@ -724,9 +697,6 @@ router.get("/admin/users", authenticate, requireAdmin, async (req, res) => {
   }
 });
 
-// =============================================
-// ADMIN: GET USER BY ID (FOR EDITING)
-// =============================================
 router.get("/admin/user/:userId", authenticate, requireAdmin, async (req, res) => {
   try {
     const { userId } = req.params;
@@ -765,9 +735,6 @@ router.get("/admin/user/:userId", authenticate, requireAdmin, async (req, res) =
   }
 });
 
-// =============================================
-// ADMIN: UPLOAD BIRTHDAY PHOTO FOR USER
-// =============================================
 router.post("/admin/upload-photo/:userId", authenticate, requireAdmin, upload.single("photo"), async (req, res) => {
   try {
     if (!req.file) {
@@ -828,9 +795,6 @@ router.post("/admin/upload-photo/:userId", authenticate, requireAdmin, upload.si
   }
 });
 
-// =============================================
-// ADMIN: REMOVE USER BIRTHDAY PHOTO
-// =============================================
 router.delete("/admin/photo/:userId", authenticate, requireAdmin, async (req, res) => {
   try {
     const { userId } = req.params;
@@ -856,9 +820,6 @@ router.delete("/admin/photo/:userId", authenticate, requireAdmin, async (req, re
   }
 });
 
-// =============================================
-// ADMIN: DELETE USER BIRTHDAY (Admin Only)
-// =============================================
 router.delete("/admin/user/:userId", authenticate, requireAdmin, async (req, res) => {
   try {
     const { userId } = req.params;
@@ -871,14 +832,12 @@ router.delete("/admin/user/:userId", authenticate, requireAdmin, async (req, res
       return res.status(404).json({ error: "User not found" });
     }
 
-    // If user has a birthday advert, delete it first
     if (existingUser.birthdayAdvertId) {
       await prisma.advertisement.delete({
         where: { id: existingUser.birthdayAdvertId }
       });
     }
 
-    // Reset all birthday-related fields
     const user = await prisma.user.update({
       where: { id: userId },
       data: {
@@ -912,9 +871,6 @@ router.delete("/admin/user/:userId", authenticate, requireAdmin, async (req, res
   }
 });
 
-// =============================================
-// ADMIN: TOGGLE BIRTHDAY OPT-IN (Admin Only)
-// =============================================
 router.patch("/admin/user/:userId/toggle-optin", authenticate, requireAdmin, async (req, res) => {
   try {
     const { userId } = req.params;
@@ -953,9 +909,6 @@ router.patch("/admin/user/:userId/toggle-optin", authenticate, requireAdmin, asy
   }
 });
 
-// =============================================
-// ADMIN: GET BIRTHDAY STATS WITH USER COUNT (Admin Only)
-// =============================================
 router.get("/admin/stats/detailed", authenticate, requireAdmin, async (req, res) => {
   try {
     const totalOptedIn = await prisma.user.count({
@@ -994,7 +947,6 @@ router.get("/admin/stats/detailed", authenticate, requireAdmin, async (req, res)
       }
     });
 
-    // Get upcoming birthdays (next 7 days)
     const upcomingBirthdays = await prisma.user.findMany({
       where: {
         birthdayOptIn: true,
@@ -1009,7 +961,6 @@ router.get("/admin/stats/detailed", authenticate, requireAdmin, async (req, res)
       }
     });
 
-    // Filter upcoming birthdays
     const upcoming = upcomingBirthdays.filter(user => {
       const birthDate = new Date();
       birthDate.setMonth(user.birthMonth - 1);
