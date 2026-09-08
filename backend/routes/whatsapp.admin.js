@@ -8,9 +8,36 @@ const { PrismaClient } = require('@prisma/client');
 const prisma = new PrismaClient();
 
 // =============================================
-// 📊 GET BOT STATUS
+// 🔐 Helper to check if user is admin or secretary
 // =============================================
-router.get('/status', authenticate, requireAdmin, async (req, res) => {
+const requireAdminOrSecretary = async (req, res, next) => {
+  try {
+    const user = await prisma.user.findUnique({
+      where: { id: req.user.userId },
+      select: { role: true, specialRole: true }
+    });
+    
+    const isAdmin = user?.role === 'admin' || user?.specialRole === 'admin';
+    const isSecretary = user?.role === 'secretary' || user?.specialRole === 'secretary';
+    
+    if (isAdmin || isSecretary) {
+      return next();
+    }
+    
+    return res.status(403).json({ 
+      success: false, 
+      error: 'Access denied. Only admins and secretaries can access this resource.' 
+    });
+  } catch (error) {
+    console.error('❌ Auth error:', error);
+    return res.status(500).json({ error: error.message });
+  }
+};
+
+// =============================================
+// 📊 GET BOT STATUS - Admin & Secretary
+// =============================================
+router.get('/status', authenticate, requireAdminOrSecretary, async (req, res) => {
   try {
     const status = bot.getStatus();
     res.json({
@@ -25,11 +52,11 @@ router.get('/status', authenticate, requireAdmin, async (req, res) => {
 });
 
 // =============================================
-// 🔗 GENERATE QR CODE (Link WhatsApp)
+// 🔗 GENERATE QR CODE (Link WhatsApp) - Admin & Secretary
 // =============================================
-router.post('/link', authenticate, requireAdmin, async (req, res) => {
+router.post('/link', authenticate, requireAdminOrSecretary, async (req, res) => {
   try {
-    console.log('🔗 Admin requested QR code...');
+    console.log('🔗 Admin/Secretary requested QR code...');
     
     const qrCode = await bot.generateNewQR();
     
@@ -57,9 +84,9 @@ router.post('/link', authenticate, requireAdmin, async (req, res) => {
 });
 
 // =============================================
-// 🔌 DISCONNECT BOT (Unlink WhatsApp)
+// 🔌 DISCONNECT BOT (Unlink WhatsApp) - Admin & Secretary
 // =============================================
-router.post('/unlink', authenticate, requireAdmin, async (req, res) => {
+router.post('/unlink', authenticate, requireAdminOrSecretary, async (req, res) => {
   try {
     const { force } = req.body;
     
@@ -91,9 +118,9 @@ router.post('/unlink', authenticate, requireAdmin, async (req, res) => {
 });
 
 // =============================================
-// 📝 SET DEFAULT GROUP ID
+// 📝 SET DEFAULT GROUP ID - Admin & Secretary
 // =============================================
-router.post('/group', authenticate, requireAdmin, async (req, res) => {
+router.post('/group', authenticate, requireAdminOrSecretary, async (req, res) => {
   try {
     const { groupId } = req.body;
     
@@ -122,12 +149,12 @@ router.post('/group', authenticate, requireAdmin, async (req, res) => {
 });
 
 // =============================================
-// 📋 GET ALL GROUPS (with rate limit protection)
+// 📋 GET ALL GROUPS - Admin & Secretary
 // =============================================
 let lastGroupFetch = 0;
-const FETCH_COOLDOWN = 60000; // 1 minute minimum between API calls
+const FETCH_COOLDOWN = 60000;
 
-router.get('/groups', authenticate, requireAdmin, async (req, res) => {
+router.get('/groups', authenticate, requireAdminOrSecretary, async (req, res) => {
   try {
     const now = Date.now();
     const timeSinceLastFetch = now - lastGroupFetch;
@@ -162,9 +189,9 @@ router.get('/groups', authenticate, requireAdmin, async (req, res) => {
 });
 
 // =============================================
-// ➕ ACTIVATE GROUP (Database Persisted)
+// ➕ ACTIVATE GROUP - Admin & Secretary
 // =============================================
-router.post('/groups/activate', authenticate, requireAdmin, async (req, res) => {
+router.post('/groups/activate', authenticate, requireAdminOrSecretary, async (req, res) => {
   try {
     const { groupId } = req.body;
     
@@ -198,9 +225,9 @@ router.post('/groups/activate', authenticate, requireAdmin, async (req, res) => 
 });
 
 // =============================================
-// ➖ DEACTIVATE GROUP (Database Persisted)
+// ➖ DEACTIVATE GROUP - Admin & Secretary
 // =============================================
-router.post('/groups/deactivate', authenticate, requireAdmin, async (req, res) => {
+router.post('/groups/deactivate', authenticate, requireAdminOrSecretary, async (req, res) => {
   try {
     const { groupId } = req.body;
     
@@ -227,12 +254,10 @@ router.post('/groups/deactivate', authenticate, requireAdmin, async (req, res) =
   }
 });
 
-
-
 // =============================================
-// 📋 GET GROUP MEMBERS
+// 📋 GET GROUP MEMBERS - Admin & Secretary
 // =============================================
-router.get('/groups/:groupId/members', authenticate, requireAdmin, async (req, res) => {
+router.get('/groups/:groupId/members', authenticate, requireAdminOrSecretary, async (req, res) => {
   try {
     const { groupId } = req.params;
     
@@ -264,9 +289,9 @@ router.get('/groups/:groupId/members', authenticate, requireAdmin, async (req, r
 });
 
 // =============================================
-// 📋 GET MESSAGE HISTORY
+// 📋 GET MESSAGE HISTORY - Admin & Secretary
 // =============================================
-router.get('/messages', authenticate, requireAdmin, async (req, res) => {
+router.get('/messages', authenticate, requireAdminOrSecretary, async (req, res) => {
   try {
     const { limit = 50, offset = 0, type, search } = req.query;
     
@@ -300,9 +325,9 @@ router.get('/messages', authenticate, requireAdmin, async (req, res) => {
 });
 
 // =============================================
-// ✏️ EDIT MESSAGE (Within 15 minutes)
+// ✏️ EDIT MESSAGE - Admin & Secretary
 // =============================================
-router.put('/messages/:id', authenticate, requireAdmin, async (req, res) => {
+router.put('/messages/:id', authenticate, requireAdminOrSecretary, async (req, res) => {
   try {
     const { id } = req.params;
     const { message } = req.body;
@@ -355,11 +380,10 @@ router.put('/messages/:id', authenticate, requireAdmin, async (req, res) => {
   }
 });
 
-
 // =============================================
-// 📤 BULK EDIT MESSAGES
+// 📤 BULK EDIT MESSAGES - Admin & Secretary
 // =============================================
-router.put('/messages/bulk-edit', authenticate, requireAdmin, async (req, res) => {
+router.put('/messages/bulk-edit', authenticate, requireAdminOrSecretary, async (req, res) => {
   try {
     const { broadcastIds, message } = req.body;
     
@@ -372,7 +396,6 @@ router.put('/messages/bulk-edit', authenticate, requireAdmin, async (req, res) =
 
     let updated = 0;
     for (const broadcastId of broadcastIds) {
-      // Find all messages with this broadcastId
       const messages = await prisma.whatsAppMessage.findMany({
         where: { 
           OR: [
@@ -383,7 +406,6 @@ router.put('/messages/bulk-edit', authenticate, requireAdmin, async (req, res) =
       });
 
       for (const msg of messages) {
-        // Update each message in WhatsApp and database
         if (msg.messageId && msg.groupId) {
           try {
             await bot.editMessage(msg.groupId, msg.messageId, message);
@@ -415,15 +437,13 @@ router.put('/messages/bulk-edit', authenticate, requireAdmin, async (req, res) =
   }
 });
 
-
 // =============================================
-// 🗑️ DELETE ALL MESSAGES
+// 🗑️ DELETE ALL MESSAGES - Admin & Secretary
 // =============================================
-router.delete('/messages/clear-all', authenticate, requireAdmin, async (req, res) => {
+router.delete('/messages/clear-all', authenticate, requireAdminOrSecretary, async (req, res) => {
   try {
     const { confirm } = req.body;
     
-    // Require confirmation to prevent accidental deletion
     if (confirm !== 'DELETE_ALL') {
       return res.status(400).json({
         success: false,
@@ -431,13 +451,8 @@ router.delete('/messages/clear-all', authenticate, requireAdmin, async (req, res
       });
     }
 
-    // Get count before deletion
     const count = await prisma.whatsAppMessage.count();
-    
-    // Delete all messages
     await prisma.whatsAppMessage.deleteMany({});
-    
-    // Also delete any broadcast records if they exist
     await prisma.whatsAppBroadcast?.deleteMany({});
     
     res.json({
@@ -455,11 +470,10 @@ router.delete('/messages/clear-all', authenticate, requireAdmin, async (req, res
   }
 });
 
-
 // =============================================
-// 🗑️ CLEAR BROADCASTS ONLY
+// 🗑️ CLEAR BROADCASTS ONLY - Admin & Secretary
 // =============================================
-router.delete('/messages/clear-broadcasts', authenticate, requireAdmin, async (req, res) => {
+router.delete('/messages/clear-broadcasts', authenticate, requireAdminOrSecretary, async (req, res) => {
   try {
     const { confirm } = req.body;
     
@@ -494,9 +508,9 @@ router.delete('/messages/clear-broadcasts', authenticate, requireAdmin, async (r
 });
 
 // =============================================
-// 🗑️ CLEAR NORMAL MESSAGES ONLY
+// 🗑️ CLEAR NORMAL MESSAGES ONLY - Admin & Secretary
 // =============================================
-router.delete('/messages/clear-messages', authenticate, requireAdmin, async (req, res) => {
+router.delete('/messages/clear-messages', authenticate, requireAdminOrSecretary, async (req, res) => {
   try {
     const { confirm } = req.body;
     
@@ -531,9 +545,9 @@ router.delete('/messages/clear-messages', authenticate, requireAdmin, async (req
 });
 
 // =============================================
-// 🗑️ BULK DELETE MESSAGES
+// 🗑️ BULK DELETE MESSAGES - Admin & Secretary
 // =============================================
-router.delete('/messages/bulk-delete', authenticate, requireAdmin, async (req, res) => {
+router.delete('/messages/bulk-delete', authenticate, requireAdminOrSecretary, async (req, res) => {
   try {
     const { broadcastIds, permanent } = req.body;
     
@@ -577,9 +591,9 @@ router.delete('/messages/bulk-delete', authenticate, requireAdmin, async (req, r
 });
 
 // =============================================
-// 🗑️ DELETE MESSAGE
+// 🗑️ DELETE MESSAGE - Admin & Secretary
 // =============================================
-router.delete('/messages/:id', authenticate, requireAdmin, async (req, res) => {
+router.delete('/messages/:id', authenticate, requireAdminOrSecretary, async (req, res) => {
   try {
     const { id } = req.params;
     const { permanent } = req.query;
@@ -609,9 +623,9 @@ router.delete('/messages/:id', authenticate, requireAdmin, async (req, res) => {
 });
 
 // =============================================
-// 📊 MESSAGE STATS
+// 📊 MESSAGE STATS - Admin & Secretary
 // =============================================
-router.get('/messages/stats', authenticate, requireAdmin, async (req, res) => {
+router.get('/messages/stats', authenticate, requireAdminOrSecretary, async (req, res) => {
   try {
     const total = await prisma.whatsAppMessage.count();
     
@@ -667,9 +681,9 @@ router.get('/messages/stats', authenticate, requireAdmin, async (req, res) => {
 });
 
 // =============================================
-// 📊 GET GROUP STATS
+// 📊 GET GROUP STATS - Admin & Secretary
 // =============================================
-router.get('/groups/stats', authenticate, requireAdmin, async (req, res) => {
+router.get('/groups/stats', authenticate, requireAdminOrSecretary, async (req, res) => {
   try {
     const stats = await bot.getGroupStats();
     res.json({
@@ -684,9 +698,9 @@ router.get('/groups/stats', authenticate, requireAdmin, async (req, res) => {
 });
 
 // =============================================
-// 📤 SEND TO GROUP (by ID or Name)
+// 📤 SEND TO GROUP - Admin & Secretary
 // =============================================
-router.post('/send', authenticate, requireAdmin, async (req, res) => {
+router.post('/send', authenticate, requireAdminOrSecretary, async (req, res) => {
   try {
     const { groupId, groupName, message } = req.body;
     
@@ -726,9 +740,9 @@ router.post('/send', authenticate, requireAdmin, async (req, res) => {
 });
 
 // =============================================
-// 📤 BROADCAST TO ALL ACTIVE GROUPS
+// 📤 BROADCAST TO ALL ACTIVE GROUPS - Admin & Secretary
 // =============================================
-router.post('/broadcast-all', authenticate, requireAdmin, async (req, res) => {
+router.post('/broadcast-all', authenticate, requireAdminOrSecretary, async (req, res) => {
   try {
     const { message, excludeGroups } = req.body;
     
@@ -755,9 +769,9 @@ router.post('/broadcast-all', authenticate, requireAdmin, async (req, res) => {
 });
 
 // =============================================
-// 📤 SEND TO JUMUIA GROUP
+// 📤 SEND TO JUMUIA GROUP - Admin & Secretary
 // =============================================
-router.post('/send-jumuia', authenticate, requireAdmin, async (req, res) => {
+router.post('/send-jumuia', authenticate, requireAdminOrSecretary, async (req, res) => {
   try {
     const { jumuiaName, message } = req.body;
     
@@ -790,9 +804,9 @@ router.post('/send-jumuia', authenticate, requireAdmin, async (req, res) => {
 });
 
 // =============================================
-// 📤 SEND TEST TO DEFAULT GROUP
+// 📤 SEND TEST TO DEFAULT GROUP - Admin & Secretary
 // =============================================
-router.post('/test-group', authenticate, requireAdmin, async (req, res) => {
+router.post('/test-group', authenticate, requireAdminOrSecretary, async (req, res) => {
   try {
     const { message } = req.body;
     
@@ -822,9 +836,9 @@ router.post('/test-group', authenticate, requireAdmin, async (req, res) => {
 });
 
 // =============================================
-// 🧹 RESET BOT
+// 🧹 RESET BOT - Admin & Secretary
 // =============================================
-router.post('/reset', authenticate, requireAdmin, async (req, res) => {
+router.post('/reset', authenticate, requireAdminOrSecretary, async (req, res) => {
   try {
     const { force } = req.body;
     
@@ -856,9 +870,9 @@ router.post('/reset', authenticate, requireAdmin, async (req, res) => {
 });
 
 // =============================================
-// 🔄 REFRESH GROUPS
+// 🔄 REFRESH GROUPS - Admin & Secretary
 // =============================================
-router.post('/groups/refresh', authenticate, requireAdmin, async (req, res) => {
+router.post('/groups/refresh', authenticate, requireAdminOrSecretary, async (req, res) => {
   try {
     const groups = await bot.refreshGroups();
     res.json({
