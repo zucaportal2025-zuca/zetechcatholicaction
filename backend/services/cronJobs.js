@@ -202,7 +202,7 @@ async function checkNoAnnouncements() {
 }
 
 // =============================================
-// BIRTHDAY ADVERT PROCESSING - UPDATED
+// BIRTHDAY ADVERT PROCESSING - FIXED
 // =============================================
 
 async function processBirthdayAdverts() {
@@ -302,38 +302,50 @@ async function processBirthdayAdverts() {
       if (settings.sendToWhatsApp && imageUrl) {
         try {
           const whatsappBot = require("./whatsapp.bot");
-          const activeGroups = await prisma.whatsAppGroup.findMany({
-            where: { isActive: true }
-          });
 
-          if (activeGroups.length > 0) {
-            // ✅ Use the same formatted message for WhatsApp
-            const message = (settings.whatsAppMessage || birthdayDescription).replace(/{name}/g, user.fullName);
+          // ✅ FIX: Use ONLY the groups selected in birthday settings
+          const birthdayWhatsAppSettings = await prisma.birthdayWhatsAppSetting.findFirst();
+          const selectedGroupIds = birthdayWhatsAppSettings?.selectedGroupIds || [];
 
-            for (const group of activeGroups) {
-              try {
-                if (whatsappBot.sock && whatsappBot.isConnected) {
-                  await whatsappBot.sock.sendMessage(group.groupId, {
-                    image: { url: imageUrl },
-                    caption: message
-                  });
-                  console.log(`WhatsApp sent to ${group.groupName || group.groupId}`);
-                } else {
-                  console.log(`⚠️ Bot not connected, message not sent to ${group.groupId}`);
-                }
+          console.log(`📋 Birthday WhatsApp groups selected: ${selectedGroupIds.length}`);
 
-                // ✅ SET BIRTHDAY MODE IN DATABASE
-                await prisma.whatsAppGroup.update({
-                  where: { groupId: group.groupId },
-                  data: {
-                    birthdayMode: true,
-                    birthdayModeExpires: new Date(Date.now() + 24 * 60 * 60 * 1000)
+          if (selectedGroupIds.length === 0) {
+            console.log("⚠️ No birthday WhatsApp groups selected — skipping WhatsApp send");
+          } else {
+            const activeGroups = await prisma.whatsAppGroup.findMany({
+              where: { groupId: { in: selectedGroupIds } }
+            });
+
+            if (activeGroups.length === 0) {
+              console.log(`⚠️ None of the ${selectedGroupIds.length} selected groups exist in database`);
+            } else {
+              const message = (settings.whatsAppMessage || birthdayDescription).replace(/{name}/g, user.fullName);
+
+              for (const group of activeGroups) {
+                try {
+                  if (whatsappBot.sock && whatsappBot.isConnected) {
+                    await whatsappBot.sock.sendMessage(group.groupId, {
+                      image: { url: imageUrl },
+                      caption: message
+                    });
+                    console.log(`WhatsApp sent to ${group.groupName || group.groupId}`);
+                  } else {
+                    console.log(`⚠️ Bot not connected, message not sent to ${group.groupId}`);
                   }
-                });
 
-                console.log(`🔒 Birthday mode ON for ${group.groupName || group.groupId} (24 hours)`);
-              } catch (err) {
-                console.error(`Failed for ${group.groupId}:`, err.message);
+                  // ✅ SET BIRTHDAY MODE IN DATABASE
+                  await prisma.whatsAppGroup.update({
+                    where: { groupId: group.groupId },
+                    data: {
+                      birthdayMode: true,
+                      birthdayModeExpires: new Date(Date.now() + 24 * 60 * 60 * 1000)
+                    }
+                  });
+
+                  console.log(`🔒 Birthday mode ON for ${group.groupName || group.groupId} (24 hours)`);
+                } catch (err) {
+                  console.error(`Failed for ${group.groupId}:`, err.message);
+                }
               }
             }
           }
