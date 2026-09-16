@@ -1111,7 +1111,6 @@ cleanupAuth() {
                          hasLIDInText || 
                          hasTextMention || 
                          hasMentionedJid || 
-                         isReplyToBot ||
                          hasBotNumberInText;
       
       // Log mention detection for debugging
