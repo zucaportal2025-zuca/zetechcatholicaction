@@ -2117,3 +2117,38 @@ model BirthdayWhatsAppSetting {
 
   @@map("birthday_whatsapp_settings")
 }
+
+// ==================== DEVELOPER SERVICES (Admin Launchpad) ====================
+
+model DeveloperService {
+  id           String    @id @default(uuid())
+  slug         String    @unique            // short id like "brevo", "supabase"
+  name         String                        // display name
+  description  String?   @db.Text            // short description under the name
+  url          String    @db.Text            // main service dashboard URL
+  docsUrl      String?   @db.Text            // optional docs URL
+  icon         String    @default("terminal") // key into frontend icon map
+  category     String?                       // "Email", "Database", "Media", etc.
+  isPrimary    Boolean   @default(false)     // highlighted card
+  sortOrder    Int       @default(0)         // manual ordering
+
+  // Credentials reference — NOT raw passwords
+  loginEmail   String?                       // which account to log in with
+  vaultUrl     String?   @db.Text            // link to Bitwarden / 1Password entry
+  lastRotated  DateTime?                     // when the password was last changed
+
+  // Free-form admin notes
+  notes        String?   @db.Text
+
+  // Audit
+  createdBy    String?                        // admin user id who created it
+  updatedBy    String?                        // admin user id who last edited it
+  createdAt    DateTime  @default(now())
+  updatedAt    DateTime  @updatedAt
+
+  @@index([slug])
+  @@index([category])
+  @@index([sortOrder])
+  @@index([isPrimary])
+  @@map("developer_services")
+}

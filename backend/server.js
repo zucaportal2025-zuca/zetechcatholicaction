@@ -1635,6 +1635,12 @@ console.log('✅ WhatsApp Admin routes mounted');
 const aiMessageAssistantRoutes = require("./routes/ai.routes");
 
 app.use('/api/admin/ai', aiMessageAssistantRoutes);
+
+//dev
+
+const developerServicesRouter = require("./routes/developerServices");
+
+app.use("/api/admin/developer-services", developerServicesRouter);
 //whatsapp
 
 const whatsappBotRoutes = require('./routes/whatsapp.bot.routes');
