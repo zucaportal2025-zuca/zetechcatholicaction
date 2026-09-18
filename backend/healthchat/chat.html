@@ -1,0 +1,267 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>ZUCA Health Chat</title>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+      background: #0b1220; color: #e2e8f0;
+      height: 100vh; display: flex; flex-direction: column;
+    }
+    header {
+      background: #1e293b; padding: 14px 20px;
+      border-bottom: 1px solid #334155;
+      display: flex; align-items: center; gap: 10px;
+    }
+    header h1 { font-size: 15px; font-weight: 600; }
+    header .badge {
+      background: #dc2626; color: white; font-size: 11px; font-weight: 700;
+      padding: 2px 8px; border-radius: 6px; letter-spacing: 0.5px;
+    }
+    header .who { font-size: 12px; color: #94a3b8; }
+    header .dot {
+      width: 10px; height: 10px; border-radius: 50%;
+      background: #64748b; margin-left: auto; transition: background 0.3s;
+    }
+    header button.logout {
+      background: transparent; border: 1px solid #475569; color: #cbd5e1;
+      padding: 4px 10px; border-radius: 6px; cursor: pointer; font-size: 12px;
+    }
+    header button.logout:hover { background: #334155; }
+
+    #login {
+      padding: 40px 20px; max-width: 380px; margin: 60px auto;
+      background: #1e293b; border-radius: 12px; border: 1px solid #334155;
+    }
+    #login h2 { font-size: 18px; margin-bottom: 6px; }
+    #login p.sub { color: #94a3b8; font-size: 13px; margin-bottom: 16px; }
+    #login input {
+      width: 100%; padding: 10px 12px; margin-bottom: 10px;
+      background: #0f172a; border: 1px solid #334155; border-radius: 8px;
+      color: #e2e8f0; font-size: 14px;
+    }
+    #login input:focus { outline: none; border-color: #3b82f6; }
+    #login button {
+      width: 100%; padding: 11px; background: #dc2626; color: white;
+      border: none; border-radius: 8px; font-weight: 600; cursor: pointer;
+    }
+    #login button:hover { background: #b91c1c; }
+    #err { color: #f87171; font-size: 13px; margin-top: 10px; min-height: 16px; }
+
+    #chat { flex: 1; display: none; flex-direction: column; min-height: 0; }
+    #messages {
+      flex: 1; overflow-y: auto; padding: 20px;
+      display: flex; flex-direction: column; gap: 12px;
+    }
+    .msg { max-width: 80%; padding: 12px 16px; border-radius: 12px;
+           font-size: 14px; line-height: 1.6; white-space: pre-wrap; }
+    .me { align-self: flex-end; background: #3b82f6; color: white; }
+    .bot { align-self: flex-start; background: #1e293b; border: 1px solid #334155; }
+    .bot.great     { border-color: #22c55e; }
+    .bot.mostly-ok { border-color: #22c55e; }
+    .bot.warning   { border-color: #f59e0b; }
+    .bot.critical  { border-color: #ef4444; }
+    .sys { align-self: center; background: transparent; color: #64748b; font-size: 12px; }
+    .typing { color: #64748b; font-style: italic; }
+    #inputbar {
+      display: flex; gap: 8px; padding: 12px 16px;
+      background: #1e293b; border-top: 1px solid #334155;
+    }
+    #inputbar input {
+      flex: 1; padding: 11px 14px; background: #0f172a;
+      border: 1px solid #334155; border-radius: 10px;
+      color: #e2e8f0; font-size: 14px; outline: none;
+    }
+    #inputbar input:focus { border-color: #dc2626; }
+    #inputbar button {
+      padding: 0 20px; background: #dc2626; color: white;
+      border: none; border-radius: 10px; font-weight: 600; cursor: pointer;
+    }
+    #inputbar button:hover { background: #b91c1c; }
+    #inputbar button:disabled { opacity: 0.5; cursor: not-allowed; }
+    .quick {
+      padding: 8px 16px 0; display: flex; flex-wrap: wrap; gap: 6px;
+    }
+    .quick button {
+      background: #1e293b; border: 1px solid #334155; color: #cbd5e1;
+      font-size: 12px; padding: 5px 10px; border-radius: 999px; cursor: pointer;
+    }
+    .quick button:hover { background: #334155; }
+  </style>
+</head>
+<body>
+  <header>
+    <span class="badge">ADMIN</span>
+    <h1>ZUCA Health Chat</h1>
+    <span class="who" id="whoami"></span>
+    <div class="dot" id="dot"></div>
+    <button class="logout" onclick="logout()">Log out</button>
+  </header>
+
+  <div id="login">
+    <h2>🔒 Admin login required</h2>
+    <p class="sub">Only admins can ask me how I'm doing.</p>
+    <input id="email" type="email" placeholder="Admin email" autocomplete="username" />
+    <input id="password" type="password" placeholder="Password" autocomplete="current-password" />
+    <button onclick="login()">Log in</button>
+    <div id="err"></div>
+  </div>
+
+  <div id="chat">
+    <div class="quick">
+      <button onclick="quick('how are you?')">🩺 how are you?</button>
+      <button onclick="quick('how&#39;s memory?')">💾 memory</button>
+      <button onclick="quick('is the database ok?')">🗄️ database</button>
+      <button onclick="quick('how long have you been up?')">⏱️ uptime</button>
+      <button onclick="quick('who&#39;s online?')">👥 who&#39;s online?</button>
+    </div>
+    <div id="messages"></div>
+    <div id="inputbar">
+      <input id="msg" placeholder="Ask me anything... e.g. 'how are you?'" />
+      <button id="send" onclick="send()">Send</button>
+    </div>
+  </div>
+
+<script>
+  let token = null;
+  const $ = (id) => document.getElementById(id);
+
+  // Restore session on reload
+  window.addEventListener("DOMContentLoaded", () => {
+    const saved = sessionStorage.getItem("admin_token");
+    const name  = sessionStorage.getItem("admin_name");
+    if (saved) {
+      verifyAdmin(saved).then(ok => {
+        if (ok) { token = saved; enterChat(name || "admin"); }
+        else    { sessionStorage.clear(); }
+      });
+    }
+  });
+
+  async function login() {
+    const email = $("email").value.trim();
+    const password = $("password").value;
+    $("err").textContent = "";
+
+    try {
+      const r = await fetch("/api/login", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ email, password })
+      });
+      const data = await r.json();
+
+      if (!r.ok) { $("err").textContent = data.error || "Login failed"; return; }
+
+      const ok = await verifyAdmin(data.token);
+      if (!ok) { $("err").textContent = "❌ This account is not an administrator."; return; }
+
+      token = data.token;
+      sessionStorage.setItem("admin_token", token);
+      sessionStorage.setItem("admin_name", data.user.fullName);
+      enterChat(data.user.fullName);
+    } catch (e) {
+      $("err").textContent = "Network error: " + e.message;
+    }
+  }
+
+  async function verifyAdmin(tok) {
+    try {
+      const r = await fetch("/api/me", { headers: { "Authorization": "Bearer " + tok } });
+      if (!r.ok) return false;
+      const me = await r.json();
+      return me.role === "admin" || me.specialRole === "admin";
+    } catch { return false; }
+  }
+
+  function enterChat(name) {
+    $("login").style.display = "none";
+    $("chat").style.display  = "flex";
+    $("whoami").textContent  = "· " + name;
+    addMsg("bot", "👋 Hi! Ask me how I'm doing — e.g. 'how are you?'", "great");
+    $("msg").focus();
+    // Auto-ask on load
+    setTimeout(() => quick("how are you?"), 400);
+  }
+
+  function logout() {
+    sessionStorage.clear();
+    token = null;
+    $("chat").style.display  = "none";
+    $("login").style.display = "block";
+    $("email").value = "";
+    $("password").value = "";
+    $("messages").innerHTML = "";
+    $("whoami").textContent = "";
+    $("dot").style.background = "#64748b";
+  }
+
+  function quick(text) { $("msg").value = text; send(); }
+
+  async function send() {
+    const input = $("msg");
+    const text  = input.value.trim();
+    if (!text || !token) return;
+
+    addMsg("me", text);
+    input.value = "";
+    $("send").disabled = true;
+    const typing = addMsg("sys", "checking...", null, true);
+
+    try {
+      const r = await fetch("/api/health/chat", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "Authorization": "Bearer " + token
+        },
+        body: JSON.stringify({ message: text })
+      });
+      const data = await r.json();
+      typing.remove();
+
+      if (r.status === 401 || r.status === 403) {
+        addMsg("bot", "🔒 Session expired or not authorized. Please log in again.");
+        logout();
+        return;
+      }
+      if (!r.ok) {
+        addMsg("bot", "❌ " + (data.error || data.reply || "Something went wrong"), "warning");
+        return;
+      }
+
+      addMsg("bot", data.reply || JSON.stringify(data), data.mood);
+
+      // Update header dot color based on mood
+      const colors = {
+        great:       "#22c55e",
+        "mostly-ok": "#22c55e",
+        warning:     "#f59e0b",
+        critical:    "#ef4444"
+      };
+      if (data.mood) $("dot").style.background = colors[data.mood] || "#64748b";
+    } catch (e) {
+      typing.remove();
+      addMsg("bot", "❌ Network error: " + e.message, "critical");
+    }
+    $("send").disabled = false;
+    $("msg").focus();
+  }
+
+  function addMsg(who, text, mood = null, isTyping = false) {
+    const div = document.createElement("div");
+    div.className = "msg " + who + (mood ? " " + mood : "") + (isTyping ? " typing" : "");
+    div.textContent = text;
+    $("messages").appendChild(div);
+    $("messages").scrollTop = $("messages").scrollHeight;
+    return div;
+  }
+
+  $("msg").addEventListener("keydown", e => { if (e.key === "Enter") send(); });
+  $("password").addEventListener("keydown", e => { if (e.key === "Enter") login(); });
+</script>
+</body>
+</html>

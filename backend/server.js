@@ -1636,6 +1636,10 @@ const aiMessageAssistantRoutes = require("./routes/ai.routes");
 
 app.use('/api/admin/ai', aiMessageAssistantRoutes);
 
+//chao
+const createHealthChatRouter = require('./healthchat');
+                               
+
 //dev
 
 const developerServicesRouter = require("./routes/developerServices");
@@ -1923,6 +1927,11 @@ const io = new Server(server, {
 
 app.set("io", io);
 
+
+// ================== HEALTH CHAT ==================
+app.use('/page',        createHealthChatRouter({ prisma, io, authenticate, requireAdmin }));
+app.use('/api/health',  createHealthChatRouter({ prisma, io, authenticate, requireAdmin }));
+console.log('✅ Health chat mounted at /page and /api/health/chat');
 const { setIo } = require('./services/webhookHandler');
 setIo(io);
 
