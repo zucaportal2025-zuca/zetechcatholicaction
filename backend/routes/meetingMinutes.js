@@ -577,7 +577,7 @@ if (minutes.createdBy !== userId && !isAdminOrSec) {
               createAndSendNotification({
                 userId: notifyUserId,
                 type: "meeting_minutes_published",
-                title: `📋 Minutes Published: ${minutes.title}`,
+                title: `Minutes Published: ${minutes.title}`,
                 message: `Minutes for "${minutes.title}" are now available.`,
                 data: { minutesId: minutes.id, type: minutes.type }
               })
@@ -667,7 +667,7 @@ router.post("/:id/comment", authenticate, async (req, res) => {
       createAndSendNotification({
         userId: minutes.createdBy,
         type: "meeting_minutes_comment",
-        title: "💬 New Comment on Minutes",
+        title: "New Comment on Minutes",
         message: `${req.user.fullName} commented on "${minutes.title}"`,
         data: { minutesId: id, commentId: newComment.id }
       }).catch(err => console.error("Notification error:", err));

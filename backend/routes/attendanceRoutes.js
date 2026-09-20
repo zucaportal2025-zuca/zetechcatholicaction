@@ -568,8 +568,8 @@ router.post("/qr-checkin", authenticate, async (req, res) => {
         await createAndSendNotification({
           userId: userId,
           type: "attendance_checkin",
-          title: "✅ Check-in Successful!",
-          message: `You have been checked in for "${qrToken.sheet.title}"`,
+          title: " Check-in Successful!",
+          message: `You have been checked in for "${qrToken.sheet.title} "`,
           data: { sheetId: qrToken.sheetId, entryId: entry.id }
         });
         
@@ -754,7 +754,7 @@ const sendCheckinConfirmation = (userId, sheetTitle, entry) => {
       createAndSendNotification({
         userId: userId,
         type: "attendance_checkin",
-        title: "✅ Check-in Successful!",
+        title: " Check-in Successful!",
         message: `You have been checked in for "${sheetTitle}" at ${new Date(entry.signTime).toLocaleTimeString()}`,
         data: { sheetId: entry.sheetId, entryId: entry.id }
       }).catch(err => console.error("Check-in notif failed:", err.message));
@@ -812,8 +812,8 @@ const sendSheetOpenedNotification = async (sheet) => {
       await createAndSendNotification({
         userId: user.id,
         type: "attendance_sheet_opened",
-        title: `📋 Attendance Open: ${sheet.title}`,
-        message: `A new attendance sheet has been opened for "${sheet.title}" on ${meetingDate} at ${meetingTime} at ${sheet.location || "ZUCA"}. Please check in when you arrive.`,
+        title: ` Attendance Open: ${sheet.title}`,
+        message: `A new attendance sheet has been opened for "${sheet.title}" on ${meetingDate} at ${meetingTime} at ${sheet.location || "ZUCA"}. Please wait for QR code or click this notification.`,
         data: { sheetId: sheet.id, title: sheet.title, eventDate: sheet.eventDate }
       });
     }
@@ -881,7 +881,7 @@ if (sheet.isExecutiveOnly) {
             createAndSendNotification({
               userId: member.id,
               type: "attendance_thankyou",
-              title: "🙏 Thank You for Attending!",
+              title: "Thank You for Attending!",
               message: `Thank you for attending "${sheet.title}". Your presence is appreciated! lets build ZUCA together`,
               data: { sheetId: sheet.id, title: sheet.title }
             }).catch(err => console.error(`Notif failed for ${member.id}:`, err.message))
@@ -939,7 +939,7 @@ Zetech University Catholic Action (ZUCA)`,
         createAndSendNotification({
           userId: sheet.creator.id,
           type: "attendance_summary",
-          title: "📊 Attendance Summary Report",
+          title: " Attendance Summary Report",
           message: `${sheet.title}\nPresent: ${presentMembers.length}/${allMembers.length}\nAbsent: ${absentMembers.length}\nRate: ${((presentMembers.length / allMembers.length) * 100).toFixed(1)}%\n\nTap to view full report.`,
           data: { sheetId: sheet.id, summary: { present: presentMembers.length, absent: absentMembers.length, total: allMembers.length } }
         }).catch(err => console.error("Summary notif failed:", err.message));
@@ -1005,7 +1005,7 @@ const sendReminderToUser = async (userId, sheetId, customMessage = null) => {
     await createAndSendNotification({
       userId: user.id,
       type: "attendance_reminder",
-      title: `📢 Reminder: ${sheet.title}`,
+      title: `Reminder: ${sheet.title}`,
       message: message,
       data: { sheetId: sheet.id, title: sheet.title }
     });
@@ -1124,8 +1124,8 @@ const createAttendanceSheet = async (req, res) => {
           await createAndSendNotification({
             userId: user.id,
             type: "attendance_sheet_opened",
-            title: `📋 Attendance Open: ${sheet.title}`,
-            message: `Attendance sheet for "${sheet.title}" on ${meetingDate} is now open.`,
+            title: ` Attendance Open: ${sheet.title}`,
+            message: `Attendance sheet for "${sheet.title}" on ${meetingDate} is now open click this notification to open or wait for QR code.`,
             data: { sheetId: sheet.id }
           });
         }
@@ -2225,7 +2225,7 @@ router.post("/sheet/:sheetId/entries/batch", authenticate, requireLeaderOrAdmin,
         createAndSendNotification({
           userId: entry.userId,
           type: "attendance_checkin",
-          title: "✅ Check-in Successful!",
+          title: "Check-in Successful!",
           message: `You have been checked in for "${sheet.title}"`,
           data: { sheetId: sheet.id, entryId: entry.id }
         }).catch(() => {});
@@ -2482,7 +2482,7 @@ const sendAutomaticAbsentReminders = async () => {
         await createAndSendNotification({
           userId: member.id,
           type: "attendance_automatic_reminder",
-          title: `📢 ${hoursSinceEvent < 1 ? "Meeting in Progress" : "You Missed the Meeting"}`,
+          title: ` ${hoursSinceEvent < 1 ? "Meeting in Progress" : "You Missed the Meeting"}`,
           message: reminderMessage,
           data: { sheetId: sheet.id, title: sheet.title, hoursSinceEvent }
         });

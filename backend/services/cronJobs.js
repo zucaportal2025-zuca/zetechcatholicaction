@@ -154,7 +154,7 @@ async function sendCampaignReminders() {
         await global.createAndSendNotification({
           userId: pledge.user.id,
           type: "campaign_reminder",
-          title: `⏰ Campaign Deadline: ${daysLeft} days left`,
+          title: ` Campaign Deadline: ${daysLeft} days left`,
           message: `The "${campaign.title}" campaign ends in ${daysLeft} days. Your pending amount is KES ${pledge.pendingAmount.toLocaleString()}.`,
           data: { campaignId: campaign.id, daysLeft }
         });
@@ -191,7 +191,7 @@ async function checkNoAnnouncements() {
         await global.createAndSendNotification({
           userId: admin.id,
           type: "suggestion",
-          title: "📢 Announcement Suggestion",
+          title: "Announcement Suggestion",
           message: "No announcements have been posted in 2 weeks. Would you like me to draft one?",
           data: { action: "draft_announcement" }
         });

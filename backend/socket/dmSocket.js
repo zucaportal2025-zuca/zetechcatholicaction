@@ -315,7 +315,7 @@ try {
   await createAndSendNotification({
     userId: recipientId,
     type: "direct_message",
-    title: `💬 New message from ${message.sender.fullName}`,
+    title: ` New message from ${message.sender.fullName}`,
     message: content?.substring(0, 100) || "📎 New message",
     data: {
       conversationId: conversationId,

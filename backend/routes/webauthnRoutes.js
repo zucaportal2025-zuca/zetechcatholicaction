@@ -109,7 +109,7 @@ router.post('/register/verify', authenticate, async (req, res) => {
       await global.createAndSendNotification({
         userId: userId,
         type: 'security',
-        title: '🔐 Fingerprint Login Enabled',
+        title: ' Fingerprint Login Enabled',
         message: `You have successfully set up fingerprint login on "${deviceName || 'Unknown Device'}"!`,
         data: { credentialId: credential.id }
       });
@@ -269,7 +269,7 @@ router.post('/login/verify', async (req, res) => {
           await global.createAndSendNotification({
             userId: admin.id,
             type: 'security',
-            title: '🔐 Fingerprint Login',
+            title: 'Fingerprint Login',
             message: `${userWithRelations.fullName} logged in using fingerprint`,
             data: { userId: result.user.id }
           });

@@ -262,7 +262,7 @@ router.post("/webhook", authenticateIBM, async (req, res) => {
         await createNotification({
           userId: userId,
           type: "payment_received",
-          title: "💰 Payment Received - Claim Now!",
+          title: " Payment Received - Claim Now!",
           message: message,
           data: { amount, code: mpesaCode }
         });
@@ -274,7 +274,7 @@ router.post("/webhook", authenticateIBM, async (req, res) => {
               await sendPersonalizedEmail(
                 { email: user.email, fullName: user.fullName },
                 "payment_received",
-                `💰 Payment Received - KES ${amount.toLocaleString()}`,
+                ` Payment Received - KES ${amount.toLocaleString()}`,
                 `Dear ${user.fullName},
 
 We have received KES ${amount.toLocaleString()} from you.
@@ -300,7 +300,7 @@ If you have any issues, please contact:
 
 Thank you for your contribution!
 
-Tumsifu Yesu Kristu! 🙏`,
+Tumsifu Yesu Kristu! `,
                 { amount, code: mpesaCode, treasurerEmail, adminEmail }
               );
               console.log(`✅ Webhook: Email sent to ${user.email}`);
@@ -316,7 +316,7 @@ Tumsifu Yesu Kristu! 🙏`,
             try {
               io.to(userId).emit("new_notification", {
                 type: "payment_received",
-                title: "💰 Payment Received - Claim Now!",
+                title: " Payment Received - Claim Now!",
                 message: message,
                 data: { amount, code: mpesaCode },
                 createdAt: new Date().toISOString(),
@@ -332,7 +332,7 @@ Tumsifu Yesu Kristu! 🙏`,
                 for (const admin of admins) {
                   io.to(admin.id).emit("new_notification", {
                     type: "payment_received_admin",
-                    title: "💰 New Payment Received",
+                    title: " New Payment Received",
                     message: `${user.fullName} paid KES ${amount.toLocaleString()} (Code: ${mpesaCode})`,
                     data: { amount, code: mpesaCode, userId, payerName: user.fullName },
                     createdAt: new Date().toISOString(),
@@ -345,7 +345,7 @@ Tumsifu Yesu Kristu! 🙏`,
                         await sendPersonalizedEmail(
                           { email: admin.email, fullName: admin.fullName },
                           "payment_received_admin",
-                          `💰 New Payment: ${user.fullName} - KES ${amount.toLocaleString()}`,
+                          ` New Payment: ${user.fullName} - KES ${amount.toLocaleString()}`,
                           `Dear ${admin.fullName},
 
 ${user.fullName} has made a payment.
@@ -357,7 +357,7 @@ Payment Details:
 
 The user will need to claim this payment by pasting the code on the Contributions page.
 
-Tumsifu Yesu Kristu! 🙏`,
+Tumsifu Yesu Kristu! `,
                           { amount, code: mpesaCode, user: user.fullName }
                         );
                       } catch (err) {
@@ -379,7 +379,7 @@ Tumsifu Yesu Kristu! 🙏`,
                 for (const treasurer of treasurers) {
                   io.to(treasurer.id).emit("new_notification", {
                     type: "payment_received_admin",
-                    title: "💰 New Payment Received",
+                    title: " New Payment Received",
                     message: `${user.fullName} paid KES ${amount.toLocaleString()} (Code: ${mpesaCode})`,
                     data: { amount, code: mpesaCode, userId, payerName: user.fullName },
                     createdAt: new Date().toISOString(),
@@ -392,7 +392,7 @@ Tumsifu Yesu Kristu! 🙏`,
                         await sendPersonalizedEmail(
                           { email: treasurer.email, fullName: treasurer.fullName },
                           "payment_received_admin",
-                          `💰 New Payment: ${user.fullName} - KES ${amount.toLocaleString()}`,
+                          ` New Payment: ${user.fullName} - KES ${amount.toLocaleString()}`,
                           `Dear ${treasurer.fullName},
 
 ${user.fullName} has made a payment.
@@ -653,7 +653,7 @@ router.post("/claim", authenticateUser, async (req, res) => {
     await createNotification({
       userId: userId,
       type: "claim_success",
-      title: "✅ Payment Claimed!",
+      title: " Payment Claimed!",
       message: `KES ${result.amount} added to ${result.campaignTitle}`,
       data: { amount: result.amount, campaign: result.campaignTitle }
     });
@@ -668,7 +668,7 @@ router.post("/claim", authenticateUser, async (req, res) => {
       await createNotification({
         userId: admin.id,
         type: "payment_claimed_admin",
-        title: "💰 Payment Claimed",
+        title: " Payment Claimed",
         message: `${user?.fullName || 'A user'} claimed KES ${result.amount} for "${result.campaignTitle}"`,
         data: { amount: result.amount, campaign: result.campaignTitle, userId: userId }
       });
@@ -684,7 +684,7 @@ router.post("/claim", authenticateUser, async (req, res) => {
       await createNotification({
         userId: treasurer.id,
         type: "payment_claimed_treasurer",
-        title: "💰 Payment Claimed",
+        title: " Payment Claimed",
         message: `${user?.fullName || 'A user'} claimed KES ${result.amount} for "${result.campaignTitle}"`,
         data: { amount: result.amount, campaign: result.campaignTitle, userId: userId }
       });
@@ -891,13 +891,13 @@ router.get("/payments/:id", authenticateUser, async (req, res) => {
     timeline.push({
       event: "I&M Payment Sent",
       timestamp: payment.paymentDate,
-      icon: "🔵"
+      icon: ""
     });
 
     timeline.push({
       event: "System Received",
       timestamp: payment.createdAt,
-      icon: "🟢"
+      icon: ""
     });
 
     if (payment.status === "AUTO_MATCHED" || payment.status === "CLAIMED") {
@@ -913,7 +913,7 @@ router.get("/payments/:id", authenticateUser, async (req, res) => {
         timeline.push({
           event: "User Notified",
           timestamp: notification.createdAt,
-          icon: "🟡"
+          icon: ""
         });
       }
     }
@@ -931,7 +931,7 @@ router.get("/payments/:id", authenticateUser, async (req, res) => {
         timeline.push({
           event: "Payment Claimed",
           timestamp: claimNotification.createdAt,
-          icon: "🟣"
+          icon: ""
         });
       }
     }
@@ -948,7 +948,7 @@ router.get("/payments/:id", authenticateUser, async (req, res) => {
         timeline.push({
           event: "Pledge Updated",
           timestamp: pledge.updatedAt,
-          icon: "✅"
+          icon: ""
         });
       }
     }
@@ -1012,7 +1012,7 @@ router.put("/payments/:id/assign", authenticateUser, async (req, res) => {
     await createNotification({
       userId: userId,
       type: "payment_assigned",
-      title: "💰 Payment Assigned to You",
+      title: " Payment Assigned to You",
       message: `A payment of KES ${payment.amount} has been assigned to you. Please claim it on the Contributions page.`,
       data: { amount: payment.amount, code: payment.mpesaCode }
     });
@@ -1130,7 +1130,7 @@ router.put("/payments/:id/mark-claimed", authenticateUser, async (req, res) => {
     await createNotification({
       userId: payment.userId,
       type: "payment_marked_claimed",
-      title: "✅ Payment Marked as Claimed",
+      title: " Payment Marked as Claimed",
       message: `Your payment of KES ${payment.amount} has been marked as claimed${campaignTitle ? ` for "${campaignTitle}"` : ''}.`,
       data: { amount: payment.amount }
     });

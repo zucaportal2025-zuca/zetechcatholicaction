@@ -448,7 +448,7 @@ router.put('/reports/:reportId/review', authenticateDM, requireAdmin, async (req
     await createAndSendNotification({
       userId: report.reporterId,
       type: "report_resolved",
-      title: "📋 Report Update",
+      title: "Report Update",
       message: `Your report has been reviewed. Action taken: ${messageAction || 'Reviewed'}`,
       data: { reportId, action }
     });
@@ -588,7 +588,7 @@ router.post('/broadcast', authenticateDM, requireAdmin, async (req, res) => {
       await createAndSendNotification({
         userId: user.id,
         type: "broadcast",
-        title: `📢 ${title}`,
+        title: ` ${title}`,
         message: content.substring(0, 100),
         data: { broadcastId: broadcast.id, type: "broadcast" }
       });

@@ -682,7 +682,7 @@ case "mass_times": {
       await createAndSendNotification({
         userId: u.id,
         type: "announcement",
-        title: `📢 New Announcement: ${args.title}`,
+        title: ` New Announcement: ${args.title}`,
         message: args.content.substring(0, 150) + (args.content.length > 150 ? '...' : ''),
         data: { 
           announcementId: announcement.id,
@@ -1699,7 +1699,7 @@ case "send_bulk_email": {
         createAndSendNotification({
           userId: u.id,
           type: "announcement",
-          title: args.title || "📢 ZUCA Announcement",
+          title: args.title || " ZUCA Announcement",
           message: args.message,
           data: { 
             source: "admin_announcement",
@@ -1750,14 +1750,14 @@ case "send_bulk_email": {
 
     return {
       success: true,
-      message: `✅request sent to ${target.fullName}! 🙏`
+      message: `✅request sent to ${target.fullName}! `
     };
   }
 
   await createAndSendNotification({
     userId: target.id,
     type: "announcement",
-    title: args.title || "📢 Message from Admin",
+    title: args.title || " Message from Admin",
     message: args.message,
     data: { 
       source: "admin_individual",
@@ -2099,7 +2099,7 @@ case "notify_all": {
       await createAndSendNotification({
         userId: u.id,
         type: "announcement",
-        title: `📢 ${args.title || "New Announcement"}`,
+        title: ` ${args.title || "New Announcement"}`,
         message: (args.message || args.content || "").substring(0, 150) + ((args.message || args.content || "").length > 150 ? '...' : ''),
         data: { 
           announcementId: announcement.id,

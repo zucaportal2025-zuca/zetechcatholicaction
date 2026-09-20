@@ -126,7 +126,7 @@ router.delete("/delete-my-account", authenticate, async (req, res) => {
           await createAndSendNotification({
             userId: leader.id,
             type: "account_deleted",
-            title: "👋 Member Left ZUCA",
+            title: " Member Left ZUCA PORTAL",
             message: `${userInfo.fullName} (${userInfo.membershipNumber}) deleted their account.\nReason: ${userInfo.reason}`,
             data: { deletedUser: userInfo }
           });

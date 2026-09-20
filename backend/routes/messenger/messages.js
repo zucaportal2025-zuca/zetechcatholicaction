@@ -241,7 +241,7 @@ router.post('/', authenticateDM, async (req, res) => {
       await createAndSendNotification({
         userId: recipientId2,
         type: "direct_message",
-        title: `💬 New message from ${sender.fullName}`,
+        title: `New message from ${sender.fullName}`,
         message: content?.substring(0, 100) || "📎 New message with attachment",
         data: {
           conversationId: convId,

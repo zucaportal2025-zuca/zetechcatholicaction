@@ -2783,7 +2783,7 @@ app.post("/api/admin/executive/assign", authenticate, requireAdmin, async (req, 
     createAndSendNotification({
       userId: userId,
       type: "executive_appointment",
-      title: "🎉 Executive Appointment",
+      title: " Executive Appointment",
       message: `Congratulations! You have been appointed as ${position.title}. Thank you for serving ZUCA!`,
       data: { position: position.title, type: "executive_appointment" }
     }).catch(err => console.error("Notification failed:", err.message));
@@ -2888,7 +2888,7 @@ app.delete("/api/admin/executive/remove/:assignmentId", authenticate, requireAdm
     createAndSendNotification({
       userId: assignment.userId,
       type: "executive_removed",
-      title: "📋 Executive Role Updated",
+      title: " Executive Role Updated",
       message: `You have been removed from the position of ${assignment.position.title}. Thank you for your service!`,
       data: { position: assignment.position.title, type: "executive_removed" }
     }).catch(err => console.error("Notification failed:", err.message));
@@ -4304,7 +4304,7 @@ for (const file of files) {
             await createAndSendNotification({
               userId: user.id,
               type: "new_media",
-              title: "📸 New Gallery Update",
+              title: " New Gallery Update",
               message: `ZUCA added new ${uploadedMedia.length} item(s) to the gallery`,
               data: { mediaId: uploadedMedia[0].id }
             });
@@ -13225,8 +13225,8 @@ for (const id of uniqueNotifyIds) {
     await createAndSendNotification({
       userId: id,
       type: "new_pledge",
-      title: "💰 New Pledge",
-      message: `${pledgerName} pledged ${amount} for "${type.title}"`,
+      title: " New Pledge/Payment",
+      message: `${pledgerName} pledged/payed ${amount} for "${type.title}"`,
       data: { 
         pledgeId: pledge.id,
         contributionId: type.id,
@@ -13416,7 +13416,7 @@ for (const id of allNotifyIds) {
     await createAndSendNotification({
       userId: id,
       type: "pledge_message",
-      title: isOwner ? "📬 New question about your pledge" : "📬 New reply to your message",
+      title: isOwner ? " New question about your pledge" : " New reply to your message",
       message: content.substring(0, 100),
       data: { 
         pledgeId, 
@@ -13519,7 +13519,7 @@ app.put("/api/pledges/:pledgeId/approve", authenticate, async (req, res) => {
 await createAndSendNotification({
   userId: pledge.userId,
   type: "pledge_approved",
-  title: newStatus === "COMPLETED" ? "🎉 Pledge Completed!" : "✅ Pledge Approved",
+  title: newStatus === "COMPLETED" ? " Pledge Completed!" : " Pledge Approved",
   message: newStatus === "COMPLETED" 
     ? `Hi ${pledge.user.fullName}, Your pledge for "${pledge.contributionType.title}" has been fully paid! Thank you.`
     : `Hi ${pledge.user.fullName}, Your pledge of ${pledge.pendingAmount} for "${pledge.contributionType.title}" has been approved.`,
@@ -14123,7 +14123,7 @@ socket.on("send_game_invite", async (data) => {
 await createAndSendNotification({
   userId: toUserId,
   type: "game_invite",
-  title: "🎮 Game Invite!",
+  title: " Game Invite!",
   message: `${fromUserName} invited you to play ${gameType}!`,
   data: { 
     inviteId: invite.id, 
@@ -14139,7 +14139,7 @@ console.log(`✅ Notification created and sent for user ${toUserId}`);
       id: notification.id,
       userId: toUserId,
       type: "game_invite",
-      title: "🎮 Game Invite!",
+      title: " Game Invite!",
       message: `${fromUserName} invited you to play ${gameType}!`,
       data: { 
         inviteId: invite.id, 
@@ -14971,7 +14971,7 @@ if (hasKeyword(['find user', 'search user', 'find', 'get user', 'user details', 
             await createAndSendNotification({
               userId: user.id,
               type: "announcement",
-              title: "📢 New Announcement",
+              title: " New Announcement",
               message: title,
               data: { announcementId: announcement.id }
             });
@@ -16553,8 +16553,8 @@ const createdEvent = await prisma.scheduleEvent.create({
               await createAndSendNotification({
                 userId: user.id,
                 type: "schedule",
-                title: "📅 New Schedule Published",
-                message: `${title} has been published`,
+                title: " New Semester Schedule  Published",
+                message: `${title} has been published check in the semester schedule page or click this notification`,
                 data: { scheduleId: schedule.id }
               });
             } catch (err) {

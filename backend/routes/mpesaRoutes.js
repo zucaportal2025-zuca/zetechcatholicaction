@@ -320,7 +320,7 @@ if (payer.email) {
       await sendPersonalizedEmail(
         { email: payer.email, fullName: payer.fullName, phone: payer.phone },
         "payment_receipt",
-        `💰 Payment Receipt for ${campaign.title}`,
+        ` Payment Receipt for ${campaign.title}`,
         `Dear ${payer.fullName},\n\nThank you for your payment...`,
         { 
           amount: amount, 
@@ -341,7 +341,7 @@ if (payer.email) {
       await createNotification({
         userId: payer.id,
         type: "payment_success",
-        title: "✅ Payment Successful!",
+        title: "Payment Successful!",
         message: `Your payment of KES ${amount.toLocaleString()} for "${campaign.title}"${jumuiaName !== "Global" ? ` (${jumuiaName} Jumuia)` : ''} has been received. Receipt: ${mpesaReceiptNumber}`,
         data: { amount, receiptNumber: mpesaReceiptNumber, campaignTitle: campaign.title, jumuiaName }
       });
@@ -356,7 +356,7 @@ if (payer.email) {
         await createNotification({
           userId: admin.id,
           type: "payment_received",
-          title: "💰 New Payment Received",
+          title: " New Payment Received",
           message: `${payer.fullName} paid KES ${amount.toLocaleString()} for "${campaign.title}" (${jumuiaName})`,
           data: { userId: payer.id, amount, campaignTitle: campaign.title, jumuiaName, receiptNumber: mpesaReceiptNumber }
         });
@@ -389,7 +389,7 @@ if (payer.email) {
         await createNotification({
           userId: treasurer.id,
           type: "payment_received",
-          title: "💰 New Payment Received",
+          title: " New Payment Received",
           message: `${payer.fullName} paid KES ${amount.toLocaleString()} for "${campaign.title}" (${jumuiaName})`,
           data: { userId: payer.id, amount, campaignTitle: campaign.title, jumuiaName, receiptNumber: mpesaReceiptNumber }
         });
@@ -427,7 +427,7 @@ if (payer.email) {
           await createNotification({
             userId: leader.id,
             type: "jumuia_payment",
-            title: `🏠 ${jumuiaName} - New Payment`,
+            title: ` ${jumuiaName} - New Payment`,
             message: `${payer.fullName} paid KES ${amount.toLocaleString()} for "${campaign.title}"`,
             data: { userId: payer.id, amount, campaignTitle: campaign.title, jumuiaId, jumuiaName, receiptNumber: mpesaReceiptNumber }
           });
@@ -494,7 +494,7 @@ if (payer.email) {
       await createNotification({
         userId: payment.userId,
         type: "payment_failed",
-        title: "❌ Payment Failed",
+        title: " Payment Failed",
         message: `Your payment of KES ${payment.amount.toLocaleString()} for "${payment.contributionType.title}" failed. Reason: ${ResultDesc}`,
         data: { amount: payment.amount }
       });
@@ -831,17 +831,17 @@ router.get("/pay/campaign/:campaignId", async (req, res) => {
     html += '<body>\n';
     html += '<div class="container">\n';
     html += '<div class="header">\n';
-    html += '<h1>💰 ' + campaign.title + '</h1>\n';
+    html += '<h1> ' + campaign.title + '</h1>\n';
     html += '<p>Make a payment via M-PESA</p>\n';
     html += '</div>\n';
     html += '<div class="content">\n';
     
     html += '<div class="login-section" id="loginSection">\n';
     if (isLoggedIn) {
-      html += '<div class="logged-in">✅ Logged in as ' + user.fullName + '</div>\n';
+      html += '<div class="logged-in"> Logged in as ' + user.fullName + '</div>\n';
       html += '<button class="small-btn" onclick="logout()">Logout</button>\n';
     } else {
-      html += '<div>🔐 Already have a ZUCA account? <a href="#" onclick="showLoginForm()">Login here</a></div>\n';
+      html += '<div> Already have a ZUCA account? <a href="#" onclick="showLoginForm()">Login here</a></div>\n';
       html += '<div id="loginForm" class="login-form">\n';
       html += '<input type="email" id="loginEmail" placeholder="Email" style="width: 100%; margin-bottom: 8px;">\n';
       html += '<input type="password" id="loginPassword" placeholder="Password" style="width: 100%; margin-bottom: 8px;">\n';
@@ -860,17 +860,17 @@ router.get("/pay/campaign/:campaignId", async (req, res) => {
     html += '</div>\n';
     
     html += '<div class="form-group">\n';
-    html += '<label>📱 M-PESA Phone Number</label>\n';
+    html += '<label> M-PESA Phone Number</label>\n';
     html += '<input type="tel" id="phone" placeholder="0712345678" value="' + preFilledPhone + '">\n';
     html += '<small style="color: #666;">Enter the number that receives M-PESA messages</small>\n';
     html += '</div>\n';
     
     html += '<div class="form-group">\n';
-    html += '<label>💰 Amount (KES)</label>\n';
+    html += '<label> Amount (KES)</label>\n';
     html += '<input type="number" id="amount" placeholder="Enter amount" value="' + preFilledAmount + '" min="10">\n';
     html += '</div>\n';
     
-    html += '<button class="pay-btn" id="payBtn">💳 Pay Now with M-PESA</button>\n';
+    html += '<button class="pay-btn" id="payBtn"> Pay Now with M-PESA</button>\n';
     html += '<div id="message" class="message"></div>\n';
     html += '</div>\n';
     html += '</div>\n';
@@ -907,15 +907,15 @@ router.get("/pay/campaign/:campaignId", async (req, res) => {
     html += '    const data = await response.json();\n';
     html += '    if (response.ok) {\n';
     html += '      localStorage.setItem("token", data.token);\n';
-    html += '      msgDiv.innerHTML = "✅ Login successful! Refreshing...";\n';
+    html += '      msgDiv.innerHTML = " Login successful! Refreshing...";\n';
     html += '      msgDiv.style.color = "green";\n';
     html += '      setTimeout(() => { window.location.reload(); }, 1500);\n';
     html += '    } else {\n';
-    html += '      msgDiv.innerHTML = "❌ " + (data.error || "Login failed");\n';
+    html += '      msgDiv.innerHTML = " " + (data.error || "Login failed");\n';
     html += '      msgDiv.style.color = "red";\n';
     html += '    }\n';
     html += '  } catch (err) {\n';
-    html += '    msgDiv.innerHTML = "❌ Network error";\n';
+    html += '    msgDiv.innerHTML = " Network error";\n';
     html += '    msgDiv.style.color = "red";\n';
     html += '  }\n';
     html += '}\n';
@@ -953,15 +953,15 @@ router.get("/pay/campaign/:campaignId", async (req, res) => {
     html += '    });\n';
     html += '    const data = await response.json();\n';
     html += '    if (data.success) {\n';
-    html += '      showMessage("✅ Check your phone! Enter your M-PESA PIN to complete payment.", "success");\n';
+    html += '      showMessage(" Check your phone! Enter your M-PESA PIN to complete payment.", "success");\n';
     html += '      pollPaymentStatus(data.paymentId);\n';
     html += '    } else {\n';
-    html += '      showMessage("❌ " + (data.error || "Payment failed. Please try again."), "error");\n';
+    html += '      showMessage(" " + (data.error || "Payment failed. Please try again."), "error");\n';
     html += '      btn.innerHTML = originalText;\n';
     html += '      btn.disabled = false;\n';
     html += '    }\n';
     html += '  } catch (err) {\n';
-    html += '    showMessage("❌ Network error. Please check your connection.", "error");\n';
+    html += '    showMessage(" Network error. Please check your connection.", "error");\n';
     html += '    btn.innerHTML = originalText;\n';
     html += '    btn.disabled = false;\n';
     html += '  }\n';
@@ -976,20 +976,20 @@ router.get("/pay/campaign/:campaignId", async (req, res) => {
     html += '      const data = await response.json();\n';
     html += '      if (data.payment && data.payment.status === "SUCCESS") {\n';
     html += '        clearInterval(interval);\n';
-    html += '        showMessage("✅ Payment successful! Receipt: " + (data.payment.mpesaReceiptNumber || "N/A"), "success");\n';
-    html += '        document.getElementById("payBtn").innerHTML = "✅ Payment Complete";\n';
+    html += '        showMessage(" Payment successful! Receipt: " + (data.payment.mpesaReceiptNumber || "N/A"), "success");\n';
+    html += '        document.getElementById("payBtn").innerHTML = " Payment Complete";\n';
     html += '        setTimeout(function() { window.location.href = "/contributions"; }, 3000);\n';
     html += '      } else if (data.payment && data.payment.status === "FAILED") {\n';
     html += '        clearInterval(interval);\n';
-    html += '        showMessage("❌ Payment failed: " + (data.payment.resultDesc || "Please try again"), "error");\n';
-    html += '        document.getElementById("payBtn").innerHTML = "💳 Try Again";\n';
+    html += '        showMessage(" Payment failed: " + (data.payment.resultDesc || "Please try again"), "error");\n';
+    html += '        document.getElementById("payBtn").innerHTML = " Try Again";\n';
     html += '        document.getElementById("payBtn").disabled = false;\n';
     html += '      }\n';
     html += '    } catch (err) {}\n';
     html += '    if (attempts > 30) {\n';
     html += '      clearInterval(interval);\n';
-    html += '      showMessage("⏳ Payment is being processed. You will receive an SMS and email confirmation.", "info");\n';
-    html += '      document.getElementById("payBtn").innerHTML = "💳 Pay Now";\n';
+    html += '      showMessage(" Payment is being processed. You will receive an SMS and email confirmation.", "info");\n';
+    html += '      document.getElementById("payBtn").innerHTML = " Pay Now";\n';
     html += '      document.getElementById("payBtn").disabled = false;\n';
     html += '    }\n';
     html += '  }, 3000);\n';
@@ -1039,7 +1039,7 @@ router.get("/pay/:slug", async (req, res) => {
           </style>
         </head>
         <body>
-          <h1 class="error">❌ Payment Link Not Found</h1>
+          <h1 class="error"> Payment Link Not Found</h1>
           <p>This payment link is invalid or has expired.</p>
           <p>Please contact your Jumuia leader or administrator for assistance.</p>
         </body>
@@ -1203,17 +1203,17 @@ router.get("/pay/:slug", async (req, res) => {
     html += '<body>\n';
     html += '<div class="container">\n';
     html += '<div class="header">\n';
-    html += '<h1>💰 ' + campaign.title + '</h1>\n';
+    html += '<h1> ' + campaign.title + '</h1>\n';
     html += '<p>Make a payment via M-PESA</p>\n';
     html += '</div>\n';
     html += '<div class="content">\n';
     
     html += '<div class="login-section" id="loginSection">\n';
     if (isLoggedIn) {
-      html += '<div class="logged-in">✅ Logged in as ' + user.fullName + '</div>\n';
+      html += '<div class="logged-in"> Logged in as ' + user.fullName + '</div>\n';
       html += '<button class="small-btn" onclick="logout()">Logout</button>\n';
     } else {
-      html += '<div>🔐 Already have a ZUCA account? <a href="#" onclick="showLoginForm()">Login here</a></div>\n';
+      html += '<div> Already have a ZUCA account? <a href="#" onclick="showLoginForm()">Login here</a></div>\n';
       html += '<div id="loginForm" class="login-form">\n';
       html += '<input type="email" id="loginEmail" placeholder="Email" style="width: 100%; margin-bottom: 8px;">\n';
       html += '<input type="password" id="loginPassword" placeholder="Password" style="width: 100%; margin-bottom: 8px;">\n';
@@ -1232,17 +1232,17 @@ router.get("/pay/:slug", async (req, res) => {
     html += '</div>\n';
     
     html += '<div class="form-group">\n';
-    html += '<label>📱 M-PESA Phone Number</label>\n';
+    html += '<label> M-PESA Phone Number</label>\n';
     html += '<input type="tel" id="phone" placeholder="0712345678" value="' + preFilledPhone + '">\n';
     html += '<small style="color: #666;">Enter the number that receives M-PESA messages</small>\n';
     html += '</div>\n';
     
     html += '<div class="form-group">\n';
-    html += '<label>💰 Amount (KES)</label>\n';
+    html += '<label> Amount (KES)</label>\n';
     html += '<input type="number" id="amount" placeholder="Enter amount" value="' + preFilledAmount + '" min="10">\n';
     html += '</div>\n';
     
-    html += '<button class="pay-btn" id="payBtn">💳 Pay Now with M-PESA</button>\n';
+    html += '<button class="pay-btn" id="payBtn"> Pay Now with M-PESA</button>\n';
     html += '<div id="message" class="message"></div>\n';
     html += '</div>\n';
     html += '</div>\n';
@@ -1264,7 +1264,7 @@ router.get("/pay/:slug", async (req, res) => {
     html += '      const userData = await response.json();\n';
     html += '      userId = userData.id;\n';
     html += '      console.log("User ID set from token:", userId);\n';
-    html += '      document.getElementById("loginSection").innerHTML = \'<div class="logged-in">✅ Logged in as \' + userData.fullName + \'</div><button class="small-btn" onclick="logout()">Logout</button>\';\n';
+    html += '      document.getElementById("loginSection").innerHTML = \'<div class="logged-in"> Logged in as \' + userData.fullName + \'</div><button class="small-btn" onclick="logout()">Logout</button>\';\n';
     html += '    }\n';
     html += '  } catch (err) {\n';
     html += '    console.error("Failed to get user:", err);\n';
@@ -1299,15 +1299,15 @@ router.get("/pay/:slug", async (req, res) => {
     html += '    const data = await response.json();\n';
     html += '    if (response.ok) {\n';
     html += '      localStorage.setItem("token", data.token);\n';
-    html += '      msgDiv.innerHTML = "✅ Login successful! Refreshing...";\n';
+    html += '      msgDiv.innerHTML = " Login successful! Refreshing...";\n';
     html += '      msgDiv.style.color = "green";\n';
     html += '      setTimeout(() => { window.location.reload(); }, 1500);\n';
     html += '    } else {\n';
-    html += '      msgDiv.innerHTML = "❌ " + (data.error || "Login failed");\n';
+    html += '      msgDiv.innerHTML = " " + (data.error || "Login failed");\n';
     html += '      msgDiv.style.color = "red";\n';
     html += '    }\n';
     html += '  } catch (err) {\n';
-    html += '    msgDiv.innerHTML = "❌ Network error";\n';
+    html += '    msgDiv.innerHTML = " Network error";\n';
     html += '    msgDiv.style.color = "red";\n';
     html += '  }\n';
     html += '}\n';
@@ -1345,15 +1345,15 @@ router.get("/pay/:slug", async (req, res) => {
     html += '    });\n';
     html += '    const data = await response.json();\n';
     html += '    if (data.success) {\n';
-    html += '      showMessage("✅ Check your phone! Enter your M-PESA PIN to complete payment.", "success");\n';
+    html += '      showMessage(" Check your phone! Enter your M-PESA PIN to complete payment.", "success");\n';
     html += '      pollPaymentStatus(data.paymentId);\n';
     html += '    } else {\n';
-    html += '      showMessage("❌ " + (data.error || "Payment failed. Please try again."), "error");\n';
+    html += '      showMessage(" " + (data.error || "Payment failed. Please try again."), "error");\n';
     html += '      btn.innerHTML = originalText;\n';
     html += '      btn.disabled = false;\n';
     html += '    }\n';
     html += '  } catch (err) {\n';
-    html += '    showMessage("❌ Network error. Please check your connection.", "error");\n';
+    html += '    showMessage(" Network error. Please check your connection.", "error");\n';
     html += '    btn.innerHTML = originalText;\n';
     html += '    btn.disabled = false;\n';
     html += '  }\n';
@@ -1368,20 +1368,20 @@ router.get("/pay/:slug", async (req, res) => {
     html += '      const data = await response.json();\n';
     html += '      if (data.payment && data.payment.status === "SUCCESS") {\n';
     html += '        clearInterval(interval);\n';
-    html += '        showMessage("✅ Payment successful! Receipt: " + (data.payment.mpesaReceiptNumber || "N/A"), "success");\n';
-    html += '        document.getElementById("payBtn").innerHTML = "✅ Payment Complete";\n';
+    html += '        showMessage(" Payment successful! Receipt: " + (data.payment.mpesaReceiptNumber || "N/A"), "success");\n';
+    html += '        document.getElementById("payBtn").innerHTML = " Payment Complete";\n';
     html += '        setTimeout(function() { window.location.href = "/contributions"; }, 3000);\n';
     html += '      } else if (data.payment && data.payment.status === "FAILED") {\n';
     html += '        clearInterval(interval);\n';
-    html += '        showMessage("❌ Payment failed: " + (data.payment.resultDesc || "Please try again"), "error");\n';
-    html += '        document.getElementById("payBtn").innerHTML = "💳 Try Again";\n';
+    html += '        showMessage(" Payment failed: " + (data.payment.resultDesc || "Please try again"), "error");\n';
+    html += '        document.getElementById("payBtn").innerHTML = " Try Again";\n';
     html += '        document.getElementById("payBtn").disabled = false;\n';
     html += '      }\n';
     html += '    } catch (err) {}\n';
     html += '    if (attempts > 30) {\n';
     html += '      clearInterval(interval);\n';
-    html += '      showMessage("⏳ Payment is being processed. You will receive an SMS and email confirmation.", "info");\n';
-    html += '      document.getElementById("payBtn").innerHTML = "💳 Pay Now";\n';
+    html += '      showMessage(" Payment is being processed. You will receive an SMS and email confirmation.", "info");\n';
+    html += '      document.getElementById("payBtn").innerHTML = " Pay Now";\n';
     html += '      document.getElementById("payBtn").disabled = false;\n';
     html += '    }\n';
     html += '  }, 3000);\n';
