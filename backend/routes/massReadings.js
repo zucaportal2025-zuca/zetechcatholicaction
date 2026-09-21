@@ -263,8 +263,14 @@ router.post("/", authenticate, async (req, res) => {
         if (allUsers.length === 0) return;
 
         const uploaderName = uploader?.fullName || 'Someone';
-        const notifTitle = "📖 New Mass Reading Available";
-        const notifMessage = `${uploaderName} uploaded: ${title}`;
+const formattedDate = new Date(date).toLocaleDateString("en-KE", {
+  weekday: "long",
+  day: "numeric",
+  month: "long",
+  year: "numeric"
+});
+
+const notifTitle = `Hey ${userName}  Mass Readings for ${formattedDate} Available on the Portal`;        const notifMessage = `${uploaderName} uploaded: ${title} Available on the Portal Click here to view`;
         const notifData = { readingId: reading.id, title, date };
 
         await sendBulkNotifications(allUsers, notifTitle, notifMessage, notifData);

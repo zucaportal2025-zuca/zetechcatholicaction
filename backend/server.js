@@ -8381,8 +8381,8 @@ app.post("/api/admin/mass-programs", authenticate, async (req, res) => {
             await createAndSendNotification({
               userId: user.id,
               type: "program",
-              title: "⛪ New Mass Program",
-              message: `Mass at ${venue} on ${new Date(date).toLocaleDateString()}`,
+              title: "New Mass Program",
+              message: `Mass Program For ${venue} on ${new Date(date).toLocaleDateString()} has been uploaded please click here to view`,
               data: {}
             });
           } catch (err) {
