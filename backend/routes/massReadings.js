@@ -23,28 +23,41 @@ async function sendBulkNotifications(users, title, message, data = {}) {
   const BATCH_SIZE = 50;
   const frontendUrl = process.env.FRONTEND_URL || 'https://www.zetechcatholicaction.com';
   const deepLinkUrl = `${frontendUrl}/mass-readings`;
-  
+
   for (let i = 0; i < users.length; i += BATCH_SIZE) {
     const batch = users.slice(i, i + BATCH_SIZE);
-    
+
     setImmediate(async () => {
       try {
-        const notifications = batch.map(user => ({
-          id: `${Date.now()}-${Math.random().toString(36).substr(2, 5)}`,
-          userId: user.id,
-          type: "mass_reading",
-          title: title,
-          message: message,
-          read: false,
-          data: { ...data, url: deepLinkUrl },
-          createdAt: new Date()
-        }));
+        const notifications = batch.map(user => {
+          const personalizedTitle =
+            typeof title === 'function'
+              ? title(user)
+              : title;
+
+          const personalizedMessage =
+            typeof message === 'function'
+              ? message(user)
+              : message;
+
+          return {
+            id: `${Date.now()}-${Math.random().toString(36).substr(2, 5)}`,
+            userId: user.id,
+            type: "mass_reading",
+            title: personalizedTitle,
+            message: personalizedMessage,
+            read: false,
+            data: { ...data, url: deepLinkUrl },
+            createdAt: new Date()
+          };
+        });
 
         await prisma.notification.createMany({
           data: notifications,
           skipDuplicates: true
         });
 
+       
         const io = global.io;
         if (io) {
           batch.forEach(user => {
@@ -270,7 +283,7 @@ const formattedDate = new Date(date).toLocaleDateString("en-KE", {
   year: "numeric"
 });
 
-const notifTitle = `Hey ${userName}  Mass Readings for ${formattedDate} Available on the Portal`;        const notifMessage = `${uploaderName} uploaded: ${title} Available on the Portal Click here to view`;
+const notifTitle = `Hey ${user.fullName?.trim().split(/\s+/)[1] || "there"} 👋,  Mass Readings for ${formattedDate} Available on the Portal`;        const notifMessage = `${uploaderName} uploaded: ${title} Available on the Portal Click here to view`;
         const notifData = { readingId: reading.id, title, date };
 
         await sendBulkNotifications(allUsers, notifTitle, notifMessage, notifData);
