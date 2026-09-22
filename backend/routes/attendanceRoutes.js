@@ -1254,6 +1254,7 @@ const getSheetById = async (req, res) => {
       select: { 
         id: true,
         title: true,
+        description: true, 
         eventDate: true,
         eventTime: true,
         location: true,
