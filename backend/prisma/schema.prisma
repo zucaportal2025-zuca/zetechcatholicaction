@@ -45,7 +45,13 @@ model User {
   birthDay            Int?      
   birthdayPhoto       String?   
   birthdayMessage     String?   @db.Text
-birthdayAdvertId    Int?     @unique  // Relations
+birthdayAdvertId    Int?     @unique  
+
+
+
+
+// Relations
+
   blockedBy        BlockedUser[]     @relation("BlockedBy")
   blockedUsers     BlockedUser[]     @relation("UserBlocks")
   uploadedMedia    Media[]           @relation("UserMedia")
@@ -1449,6 +1455,9 @@ model AttendanceSheet {
   enableWifiCheckin Boolean @default(false)
   wifiSSID          String?
   checkinCode       String?
+   categoryName     String?     // "Voice Part", "Jumuia", "Year of Study", etc.
+  categoryOptions  String[]    // ["Soprano","Alto","Tenor","Bass"]
+  categoryRequired Boolean @default(true) 
   
   // Status
   isActive    Boolean @default(true)
@@ -1494,6 +1503,7 @@ model AttendanceEntry {
   membershipNumber String?
   jumuiaId      String?
   jumuiaName    String?
+    categoryValue String?
   
   // Check-in tracking
   signMethod    SignMethod

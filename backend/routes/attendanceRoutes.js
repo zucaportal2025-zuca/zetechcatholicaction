@@ -8,6 +8,7 @@ const crypto = require('crypto');
 const { sendPersonalizedEmail } = require("../services/mailer");
 const { getCurrentSemester, getSemesterDateFilter } = require("../utils/semesterHelpers");
 const { sendAttendanceToWhatsApp } = require('../services/whatsappAttendanceService');
+const { cleanCategoryInput, cleanCategoryValue } = require('../utils/categoryHelpers');
 
 // ==================== WHATSAPP AUTO-SEND ROUTES ====================
 
@@ -117,7 +118,7 @@ router.post("/sheet/:sheetId/send-whatsapp", authenticate, requireLeaderOrAdmin,
 router.put("/sheet/:sheetId/details", authenticate, requireLeaderOrAdmin, async (req, res) => {
   try {
     const { sheetId } = req.params;
-    const { 
+        const { 
       title, 
       description, 
       eventDate, 
@@ -125,7 +126,10 @@ router.put("/sheet/:sheetId/details", authenticate, requireLeaderOrAdmin, async 
       location, 
       jumuiaId,
       allowSelfCheckin,
-      enableWifiCheckin
+      enableWifiCheckin,
+      categoryName,
+      categoryOptions,
+      categoryRequired
     } = req.body;
 
     // Check if sheet exists
@@ -163,6 +167,20 @@ router.put("/sheet/:sheetId/details", authenticate, requireLeaderOrAdmin, async 
     }
     if (enableWifiCheckin !== undefined) {
       updateData.enableWifiCheckin = enableWifiCheckin;
+    }
+
+        if (categoryName !== undefined || categoryOptions !== undefined) {
+      const categoryCheck = cleanCategoryInput({
+        categoryName,
+        categoryOptions,
+        categoryRequired
+      });
+      if (categoryCheck.error) {
+        return res.status(400).json({ error: categoryCheck.error });
+      }
+      updateData.categoryName = categoryCheck.categoryName;
+      updateData.categoryOptions = categoryCheck.categoryOptions;
+      updateData.categoryRequired = categoryCheck.categoryRequired;
     }
 
     const updated = await prisma.attendanceSheet.update({
@@ -1043,11 +1061,11 @@ Zetech University Catholic Action (ZUCA)`,
 // Create new attendance sheet (OPTIMIZED - Fast response)
 const createAttendanceSheet = async (req, res) => {
   try {
-    const { 
-      title, 
-      description, 
-      eventDate, 
-      eventTime, 
+    const {
+      title,
+      description,
+      eventDate,
+      eventTime,
       location,
       allowSelfCheckin,
       enableWifiCheckin,
@@ -1058,11 +1076,24 @@ const createAttendanceSheet = async (req, res) => {
       whatsAppGroupNames,
       whatsAppCustomMessage,
       whatsAppSendOnCheckin,
-      whatsAppSendOnClose
+      whatsAppSendOnClose,
+      categoryName,
+      categoryOptions,
+      categoryRequired
     } = req.body;
 
     if (!title || !eventDate) {
       return res.status(400).json({ error: "Title and event date are required" });
+    }
+
+    const categoryCheck = cleanCategoryInput({
+      categoryName,
+      categoryOptions,
+      categoryRequired
+    });
+
+    if (categoryCheck.error) {
+      return res.status(400).json({ error: categoryCheck.error });
     }
 
     let targetJumuiaId = jumuiaId;
@@ -1070,7 +1101,7 @@ const createAttendanceSheet = async (req, res) => {
 
     if (jumuiaId === 'executive-team') {
       targetJumuiaId = null;
-      isExecutiveOnly = true;  
+      isExecutiveOnly = true;
     }
 
     const sheet = await prisma.attendanceSheet.create({
@@ -1084,7 +1115,7 @@ const createAttendanceSheet = async (req, res) => {
         enableWifiCheckin: enableWifiCheckin || false,
         wifiSSID: enableWifiCheckin ? wifiSSID : null,
         jumuiaId: targetJumuiaId,
-        isExecutiveOnly: isExecutiveOnly, 
+        isExecutiveOnly: isExecutiveOnly,
         createdBy: req.user.userId,
         isActive: true,
         enableWhatsAppAutoSend: enableWhatsAppAutoSend || false,
@@ -1092,17 +1123,19 @@ const createAttendanceSheet = async (req, res) => {
         whatsAppGroupNames: whatsAppGroupNames || null,
         whatsAppCustomMessage: whatsAppCustomMessage || null,
         whatsAppSendOnCheckin: whatsAppSendOnCheckin !== undefined ? whatsAppSendOnCheckin : true,
-        whatsAppSendOnClose: whatsAppSendOnClose !== undefined ? whatsAppSendOnClose : true
+        whatsAppSendOnClose: whatsAppSendOnClose !== undefined ? whatsAppSendOnClose : true,
+        categoryName: categoryCheck.categoryName,
+        categoryOptions: categoryCheck.categoryOptions,
+        categoryRequired: categoryCheck.categoryRequired
       }
     });
 
     res.status(201).json({ success: true, sheet });
-    
-    // Background notifications
+
     (async () => {
       try {
         let targetUsers = [];
-        
+
         if (sheet.isExecutiveOnly) {
           const executives = await prisma.executive.findMany({
             where: { isActive: true },
@@ -1117,9 +1150,9 @@ const createAttendanceSheet = async (req, res) => {
         } else {
           targetUsers = await prisma.user.findMany({ select: { id: true } });
         }
-        
+
         const meetingDate = new Date(sheet.eventDate).toLocaleDateString();
-        
+
         for (const user of targetUsers) {
           await createAndSendNotification({
             userId: user.id,
@@ -1133,7 +1166,7 @@ const createAttendanceSheet = async (req, res) => {
         console.error("Failed to send sheet notifications:", err.message);
       }
     })();
-    
+
   } catch (err) {
     console.error("Create attendance sheet error:", err);
     res.status(500).json({ error: err.message });
@@ -1229,6 +1262,9 @@ const getSheetById = async (req, res) => {
         jumuiaId: true,
         allowSelfCheckin: true,
         enableWifiCheckin: true,
+        categoryName: true,
+        categoryOptions: true,
+        categoryRequired: true,
         createdAt: true,
         createdBy: true,
         creator: {
@@ -1278,6 +1314,7 @@ const getSheetById = async (req, res) => {
         signMethod: true,
         signTime: true,
         notes: true,
+        categoryValue: true,
         verifiedBy: true,
         user: {
           select: {
@@ -1470,8 +1507,8 @@ const absentMembers = allTargetMembers
 // Self check-in (user adds themselves)
 const selfCheckin = async (req, res) => {
   try {
-    const { sheetId, deviceId, deviceName } = req.body;
-    const userId = req.user.userId;
+    const { sheetId, deviceId, deviceName, categoryValue } = req.body;
+        const userId = req.user.userId;
 
     if (!sheetId) {
       return res.status(400).json({ error: "Sheet ID required" });
@@ -1529,6 +1566,11 @@ const selfCheckin = async (req, res) => {
       }
     }
 
+        const categoryResult = cleanCategoryValue(sheet, categoryValue);
+    if (categoryResult.error) {
+      return res.status(400).json({ error: categoryResult.error });
+    }
+
     const entry = await prisma.attendanceEntry.create({
       data: {
         sheetId,
@@ -1542,7 +1584,8 @@ const selfCheckin = async (req, res) => {
         membershipNumber: user.membership_number,
         jumuiaId: user.jumuiaId,
         signMethod: "SELF",
-        signTime: new Date()
+        signTime: new Date(),
+        categoryValue: categoryResult.value
       }
     });
 

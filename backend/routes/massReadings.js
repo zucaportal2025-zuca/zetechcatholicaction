@@ -270,7 +270,7 @@ const formattedDate = new Date(date).toLocaleDateString("en-KE", {
   year: "numeric"
 });
 
-const notifTitle = `Hey  Mass Readings for ${formattedDate} Available on the Portal`;        const notifMessage = `${uploaderName} uploaded: ${title} Available on the Portal Click here to view`;
+const notifTitle = `Hey Mass Readings for ${formattedDate} Available on the Portal`;        const notifMessage = `${uploaderName} uploaded: ${title} Available on the Portal Click here to view`;
         const notifData = { readingId: reading.id, title, date };
 
         await sendBulkNotifications(allUsers, notifTitle, notifMessage, notifData);
