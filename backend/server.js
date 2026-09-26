@@ -1679,6 +1679,10 @@ app.use('/api/advertisements', advertisementRoutes);
 const birthdayRoutes = require("./routes/birthday");
 app.use("/api/birthday", birthdayRoutes);
 
+// cover image routes
+const coverRoutes = require("./routes/coverRoutes");
+app.use("/api", coverRoutes);
+
 //choir WhatsApp routes
 const choirWhatsappRoutes = require("./routes/choir-whatsapp");
 app.use("/api/choir/whatsapp", choirWhatsappRoutes);

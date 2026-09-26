@@ -21,6 +21,7 @@ model User {
   verificationExpiry DateTime?
   role              String    @default("member") // "member", "admin" (for chairman)
   profileImage      String?
+  coverImage        String?
   createdAt         DateTime  @default(now())
   lastActive        DateTime?
   jumuiaId          String?
