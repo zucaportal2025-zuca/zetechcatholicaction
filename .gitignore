@@ -1,0 +1,12 @@
+
+.git-old/
+
+.env
+.env.*
+*.env
+backend/.env
+frontend/.env
+backend/.email-backup/
+backend/prisma/dev.db
+backend/prisma/*.db
+backend/uploads/
