@@ -216,3 +216,4 @@ async function writeRosterToSheet(sheetId, semester, rows, semesterIndex = 1) {
 
 module.exports = { writeRosterToSheet };
 
+  
