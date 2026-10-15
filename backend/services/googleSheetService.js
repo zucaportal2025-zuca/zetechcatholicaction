@@ -51,16 +51,19 @@ function yearOf(date) {
 
 const LOAD_RANGE = "A1:F200";
 
+function cellText(sheet, r, c) {
+  return String(sheet.getCell(r, c)?.value || "").trim().toUpperCase();
+}
+
 function findSemesterBlock(sheet, semester) {
   const startMonth = monthName(semester.startDate);
   const year = yearOf(semester.startDate);
 
   for (let r = 0; r < 199; r++) {
-    const bVal = String(sheet.getCell(r, 1)?.value || "").trim().toUpperCase();
-    if (bVal !== "SEMESTER") continue;
+    if (cellText(sheet, r, 1) !== "SEMESTER") continue;
 
-    const cVal = String(sheet.getCell(r + 1, 2)?.value || "").trim().toUpperCase();
-    const eVal = String(sheet.getCell(r + 1, 4)?.value || "").trim().toUpperCase();
+    const cVal = cellText(sheet, r + 1, 2);
+    const eVal = cellText(sheet, r + 1, 4);
 
     if (cVal === startMonth && eVal === year) {
       return r;
@@ -69,31 +72,209 @@ function findSemesterBlock(sheet, semester) {
   return -1;
 }
 
-async function boldRows(auth, spreadsheetId, tabId, ranges) {
-  const sheets = google.sheets({ version: "v4", auth });
+function detectHeaderRanges(sheet) {
+  const ranges = [];
 
-  const requests = ranges.map((range) => ({
-    repeatCell: {
-      range: {
-        sheetId: tabId,
-        startRowIndex: range.start,
-        endRowIndex: range.end,
-        startColumnIndex: 0,
-        endColumnIndex: 5,
-      },
-      cell: {
-        userEnteredFormat: {
-          textFormat: { bold: true },
+  for (let r = 0; r < 199; r++) {
+    const b = cellText(sheet, r, 1);
+
+    if (b === "SEMESTER") {
+      ranges.push({ start: r, end: r + 1 });
+      ranges.push({ start: r + 1, end: r + 2 });
+    }
+
+    if (b === "NAME") {
+      ranges.push({ start: r, end: r + 1 });
+    }
+  }
+
+  return ranges;
+}
+
+async function applyFormatting(sheetId) {
+  try {
+    await new Promise((r) => setTimeout(r, 1200));
+
+    const auth = getAuth();
+    const doc = new GoogleSpreadsheet(sheetId, auth);
+    await doc.loadInfo();
+    const sheet = doc.sheetsByIndex[0];
+    await sheet.loadCells(LOAD_RANGE);
+
+    const sheets = google.sheets({ version: "v4", auth });
+
+    // 1. Bold + Montserrat 11 on every header row
+    const headerRanges = detectHeaderRanges(sheet);
+    console.log(`[sheet] detected ${headerRanges.length} header ranges to format`);
+
+    if (headerRanges.length) {
+      await sheets.spreadsheets.batchUpdate({
+        spreadsheetId: sheetId,
+        requestBody: {
+          requests: headerRanges.map((range) => ({
+            repeatCell: {
+              range: {
+                sheetId: sheet.sheetId,
+                startRowIndex: range.start,
+                endRowIndex: range.end,
+                startColumnIndex: 0,
+                endColumnIndex: 5,
+              },
+              cell: {
+                userEnteredFormat: {
+                  textFormat: {
+                    bold: true,
+                    fontFamily: "Montserrat",
+                    fontSize: 11,
+                  },
+                },
+              },
+              fields:
+                "userEnteredFormat.textFormat.bold," +
+                "userEnteredFormat.textFormat.fontFamily," +
+                "userEnteredFormat.textFormat.fontSize",
+            },
+          })),
         },
-      },
-      fields: "userEnteredFormat.textFormat.bold",
-    },
-  }));
+      });
+    }
 
-  await sheets.spreadsheets.batchUpdate({
-    spreadsheetId,
-    requestBody: { requests },
-  });
+    // 2. Force ADMIN.NO column (C) to plain text, black, no underline
+    await sheets.spreadsheets.batchUpdate({
+      spreadsheetId: sheetId,
+      requestBody: {
+        requests: [
+          {
+            repeatCell: {
+              range: {
+                sheetId: sheet.sheetId,
+                startRowIndex: 0,
+                endRowIndex: 200,
+                startColumnIndex: 2,
+                endColumnIndex: 3,
+              },
+              cell: {
+                userEnteredFormat: {
+                  numberFormat: {
+                    type: "TEXT",
+                    pattern: "@",
+                  },
+                  textFormat: {
+                    underline: false,
+                    foregroundColor: { red: 0, green: 0, blue: 0 },
+                  },
+                },
+              },
+              fields:
+                "userEnteredFormat.numberFormat," +
+                "userEnteredFormat.textFormat.underline," +
+                "userEnteredFormat.textFormat.foregroundColor",
+            },
+          },
+        ],
+      },
+    });
+
+    // 3. Wrap + vertical-align on ROLE cell of each NAME row
+    for (let r = 0; r < 199; r++) {
+      if (cellText(sheet, r, 1) !== "NAME") continue;
+
+      await sheets.spreadsheets.batchUpdate({
+        spreadsheetId: sheetId,
+        requestBody: {
+          requests: [
+            {
+              repeatCell: {
+                range: {
+                  sheetId: sheet.sheetId,
+                  startRowIndex: r,
+                  endRowIndex: r + 1,
+                  startColumnIndex: 4,
+                  endColumnIndex: 5,
+                },
+                cell: {
+                  userEnteredFormat: {
+                    wrapStrategy: "WRAP",
+                    verticalAlignment: "MIDDLE",
+                  },
+                },
+                fields:
+                  "userEnteredFormat.wrapStrategy," +
+                  "userEnteredFormat.verticalAlignment",
+              },
+            },
+            {
+              repeatCell: {
+                range: {
+                  sheetId: sheet.sheetId,
+                  startRowIndex: r,
+                  endRowIndex: r + 1,
+                  startColumnIndex: 1,
+                  endColumnIndex: 4,
+                },
+                cell: {
+                  userEnteredFormat: {
+                    verticalAlignment: "MIDDLE",
+                  },
+                },
+                fields: "userEnteredFormat.verticalAlignment",
+              },
+            },
+          ],
+        },
+      });
+    }
+
+    // 4. Border each semester block
+    for (let r = 0; r < 199; r++) {
+      if (cellText(sheet, r, 1) !== "SEMESTER") continue;
+
+      let blockEnd = r + 1;
+      for (let rr = r + 1; rr < 199; rr++) {
+        if (cellText(sheet, rr, 1) === "SEMESTER") break;
+
+        let hasValue = false;
+        for (let c = 0; c < 5; c++) {
+          if (String(sheet.getCell(rr, c)?.value || "").trim()) {
+            hasValue = true;
+            break;
+          }
+        }
+        if (hasValue) blockEnd = rr + 1;
+      }
+
+      console.log(`[sheet] border range rows ${r + 1}–${blockEnd}`);
+
+      await sheets.spreadsheets.batchUpdate({
+        spreadsheetId: sheetId,
+        requestBody: {
+          requests: [
+            {
+              updateBorders: {
+                range: {
+                  sheetId: sheet.sheetId,
+                  startRowIndex: r,
+                  endRowIndex: blockEnd,
+                  startColumnIndex: 0,
+                  endColumnIndex: 5,
+                },
+                top:    { style: "SOLID", color: { red: 0, green: 0, blue: 0 } },
+                bottom: { style: "SOLID", color: { red: 0, green: 0, blue: 0 } },
+                left:   { style: "SOLID", color: { red: 0, green: 0, blue: 0 } },
+                right:  { style: "SOLID", color: { red: 0, green: 0, blue: 0 } },
+                innerHorizontal: { style: "SOLID", color: { red: 0, green: 0, blue: 0 } },
+                innerVertical:   { style: "SOLID", color: { red: 0, green: 0, blue: 0 } },
+              },
+            },
+          ],
+        },
+      });
+    }
+
+    console.log(`[sheet] formatting done`);
+  } catch (err) {
+    console.warn(`[sheet] formatting failed:`, err.message);
+  }
 }
 
 async function writeRosterToSheet(sheetId, semester, rows, semesterIndex = 1) {
@@ -113,21 +294,23 @@ async function writeRosterToSheet(sheetId, semester, rows, semesterIndex = 1) {
   console.log(`[sheet] header row found at index:`, headerRowIndex);
 
   if (headerRowIndex >= 0) {
-    const dataStartRow = headerRowIndex + 4;
+    // SEMESTER row → values row → NAME row → data
+    const dataStartRow = headerRowIndex + 3;
 
     let dataEndRow = dataStartRow;
     for (let r = dataStartRow; r < 199; r++) {
-      const bVal = String(sheet.getCell(r, 1)?.value || "").trim().toUpperCase();
+      const bVal = cellText(sheet, r, 1);
       const aVal = String(sheet.getCell(r, 0)?.value || "").trim();
 
-      if (bVal === "SEMESTER") break;
+      if (bVal === "SEMESTER" || bVal === "NAME") break;
       if (bVal === "" && aVal === "") break;
       dataEndRow = r + 1;
     }
 
-    for (let r = dataStartRow; r < dataEndRow; r++) {
+    const clearEnd = Math.max(dataEndRow, dataStartRow + rows.length);
+    for (let r = dataStartRow; r < clearEnd; r++) {
       for (let c = 0; c < 5; c++) {
-        sheet.getCell(r, c).value = null;
+        if (r < 200) sheet.getCell(r, c).value = null;
       }
     }
 
@@ -136,23 +319,13 @@ async function writeRosterToSheet(sheetId, semester, rows, semesterIndex = 1) {
       if (targetRow >= 200) return;
       sheet.getCell(targetRow, 0).value = row.index;
       sheet.getCell(targetRow, 1).value = row.name;
-      sheet.getCell(targetRow, 2).value = row.admissionNumber;
+      sheet.getCell(targetRow, 2).value = row.admissionNumber || "";
       sheet.getCell(targetRow, 3).value = row.contact;
       sheet.getCell(targetRow, 4).value = row.role;
     });
 
     await sheet.saveUpdatedCells();
-
-    try {
-      await boldRows(auth, sheetId, sheet.sheetId, [
-        { start: headerRowIndex, end: headerRowIndex + 1 },
-        { start: headerRowIndex + 1, end: headerRowIndex + 2 },
-        { start: headerRowIndex + 3, end: headerRowIndex + 4 },
-      ]);
-      console.log(`[sheet] bolded header rows`);
-    } catch (err) {
-      console.warn(`[sheet] bold formatting failed:`, err.message);
-    }
+    await applyFormatting(sheetId);
 
     return { mode: "updated", written: rows.length };
   }
@@ -181,12 +354,17 @@ async function writeRosterToSheet(sheetId, semester, rows, semesterIndex = 1) {
   const newRows = [
     ["", "SEMESTER", "MONTH", "TO", "YEAR"],
     ["", String(semesterIndex), startMonth, endMonth, year],
-    [],
     ["", "NAME", "ADMIN.NO", "CONTACT", "ROLE e.g. cCairperson, Secreatary, Treasurer, Member etc"],
   ];
 
   rows.forEach((row) => {
-    newRows.push([row.index, row.name, row.admissionNumber, row.contact, row.role]);
+    newRows.push([
+      row.index,
+      row.name,
+      row.admissionNumber || "",
+      row.contact,
+      row.role,
+    ]);
   });
 
   for (let i = 0; i < newRows.length; i++) {
@@ -199,21 +377,9 @@ async function writeRosterToSheet(sheetId, semester, rows, semesterIndex = 1) {
   }
 
   await sheet.saveUpdatedCells();
-
-  try {
-    await boldRows(auth, sheetId, sheet.sheetId, [
-      { start: startRow, end: startRow + 1 },
-      { start: startRow + 1, end: startRow + 2 },
-      { start: startRow + 3, end: startRow + 4 },
-    ]);
-    console.log(`[sheet] bolded header rows`);
-  } catch (err) {
-    console.warn(`[sheet] bold formatting failed:`, err.message);
-  }
+  await applyFormatting(sheetId);
 
   return { mode: "appended", written: rows.length };
 }
 
 module.exports = { writeRosterToSheet };
-
-  
