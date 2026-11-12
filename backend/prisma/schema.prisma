@@ -286,6 +286,9 @@ model MassProgram {
   id        String   @id @default(uuid())
   date      DateTime
   venue     String
+  coverImageUrl String?
+   showCoverText   Boolean  @default(true)
+ coverTextColor  String   @default("#FFD700")
   createdAt DateTime @default(now())
   updatedAt DateTime @default(now()) @updatedAt
 

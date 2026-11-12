@@ -1684,6 +1684,11 @@ app.use('/api', countdownRoutes);
 const advertisementRoutes = require('./routes/advertisementRoutes');
 app.use('/api/advertisements', advertisementRoutes);
 
+//program covers
+
+const coversRouter = require("./routes/covers");
+app.use("/api/covers", coversRouter);
+
 //birthday
 const birthdayRoutes = require("./routes/birthday");
 app.use("/api/birthday", birthdayRoutes);
@@ -8189,11 +8194,14 @@ app.get("/api/mass-programs", async (req, res) => {
       });
       
       // Convert arrays to semicolon-separated strings for frontend
-      return {
-        id: p.id,
-        date: p.date.toISOString().split("T")[0],
-        venue: p.venue,
-        entrance: (songMap.entrance || []).join('; '),
+    return {
+  id: p.id,
+  date: p.date.toISOString().split("T")[0],
+  venue: p.venue,
+  coverImageUrl: p.coverImageUrl,
+  showCoverText: p.showCoverText,
+  coverTextColor: p.coverTextColor,
+  entrance: (songMap.entrance || []).join('; '),
         mass: (songMap.mass || []).join('; '),
         bible: (songMap.bible || []).join('; '),
         offertory: (songMap.offertory || []).join('; '),
@@ -8253,11 +8261,14 @@ app.get("/api/admin/mass-programs", authenticate, async (req, res) => {
       });
       
       // Convert arrays to semicolon-separated strings for frontend
-      return {
-        id: p.id,
-        date: p.date.toISOString().split("T")[0],
-        venue: p.venue,
-        entrance: (songMap.entrance || []).join('; '),
+    return {
+  id: p.id,
+  date: p.date.toISOString().split("T")[0],
+  venue: p.venue,
+  coverImageUrl: p.coverImageUrl,
+  showCoverText: p.showCoverText,
+  coverTextColor: p.coverTextColor,
+  entrance: (songMap.entrance || []).join('; '),
         mass: (songMap.mass || []).join('; '),
         bible: (songMap.bible || []).join('; '),
         offertory: (songMap.offertory || []).join('; '),
@@ -8283,7 +8294,7 @@ app.get("/api/admin/mass-programs", authenticate, async (req, res) => {
 // CREATE mass program (admin/choir moderator only) - FIXED VERSION (NO REMATCHING)
 app.post("/api/admin/mass-programs", authenticate, async (req, res) => {
   try {
-    const { date, venue, ...songsData } = req.body;
+   const { date, venue, coverImageUrl, showCoverText, coverTextColor, ...songsData } = req.body;
     
     if (!date || !venue) {
       return res.status(400).json({ error: "Date and venue are required" });
@@ -8300,13 +8311,16 @@ app.post("/api/admin/mass-programs", authenticate, async (req, res) => {
       return res.status(403).json({ error: "Not authorized to create mass programs" });
     }
 
-    const newProgram = await prisma.massProgram.create({
-      data: { 
-        date: new Date(date), 
-        venue, 
-        createdBy: req.user.userId
-      }
-    });
+   const newProgram = await prisma.massProgram.create({
+  data: { 
+    date: new Date(date), 
+    venue, 
+    coverImageUrl: coverImageUrl || null,
+    showCoverText: showCoverText !== false,
+    coverTextColor: coverTextColor || "gold",
+    createdBy: req.user.userId
+  }
+});
 
     for (const [type, value] of Object.entries(songsData)) {
       if (!value || value.trim() === "") continue;
@@ -8369,10 +8383,13 @@ app.post("/api/admin/mass-programs", authenticate, async (req, res) => {
     });
 
     const response = {
-      id: completeProgram.id,
-      date: completeProgram.date.toISOString().split("T")[0],
-      venue: completeProgram.venue,
-      entrance: (songMap.entrance || []).join('; '),
+  id: completeProgram.id,
+  date: completeProgram.date.toISOString().split("T")[0],
+  venue: completeProgram.venue,
+  coverImageUrl: completeProgram.coverImageUrl,
+  showCoverText: completeProgram.showCoverText,
+  coverTextColor: completeProgram.coverTextColor,
+  entrance: (songMap.entrance || []).join('; '),
       mass: (songMap.mass || []).join('; '),
       bible: (songMap.bible || []).join('; '),
       offertory: (songMap.offertory || []).join('; '),
@@ -8421,7 +8438,7 @@ app.put("/api/admin/mass-programs/:id", authenticate, async (req, res) => {
   
   try {
     const { id } = req.params;
-    const { date, venue, ...songsData } = req.body;
+    const { date, venue, coverImageUrl, showCoverText, coverTextColor, ...songsData } = req.body;
 
     // Check authorization
     const user = await prisma.user.findUnique({ 
@@ -8436,14 +8453,17 @@ app.put("/api/admin/mass-programs/:id", authenticate, async (req, res) => {
     }
 
     // Update basic info
-    await prisma.massProgram.update({
-      where: { id },
-      data: { 
-        date: new Date(date), 
-        venue,
-        updatedAt: new Date()
-      }
-    });
+  await prisma.massProgram.update({
+  where: { id },
+  data: { 
+    date: new Date(date), 
+    venue,
+    coverImageUrl: coverImageUrl || null,
+    showCoverText: showCoverText !== false,
+    coverTextColor: coverTextColor || "gold",
+    updatedAt: new Date()
+  }
+});
 
     // Delete  songs
     await prisma.massProgramSong.deleteMany({ 
@@ -8525,11 +8545,14 @@ app.put("/api/admin/mass-programs/:id", authenticate, async (req, res) => {
     });
 
     // Convert arrays to semicolon-separated strings for frontend
-    const response = {
-      id: updatedProgram.id,
-      date: updatedProgram.date.toISOString().split("T")[0],
-      venue: updatedProgram.venue,
-      entrance: (songMap.entrance || []).join('; '),
+   const response = {
+  id: updatedProgram.id,
+  date: updatedProgram.date.toISOString().split("T")[0],
+  venue: updatedProgram.venue,
+  coverImageUrl: updatedProgram.coverImageUrl,
+  showCoverText: updatedProgram.showCoverText,
+  coverTextColor: updatedProgram.coverTextColor,
+  entrance: (songMap.entrance || []).join('; '),
       mass: (songMap.mass || []).join('; '),
       bible: (songMap.bible || []).join('; '),
       offertory: (songMap.offertory || []).join('; '),
@@ -8651,15 +8674,18 @@ app.get("/api/mass-programs/:id/booklet-data", authenticate, async (req, res) =>
       day: 'numeric'
     });
     
-    const response = {
+       const response = {
       success: true,
-      program: {
-        id: program.id,
-        date: program.date.toISOString().split('T')[0],
-        formattedDate: formattedDate,
-        venue: program.venue,
-        createdAt: program.createdAt
-      },
+    program: {
+  id: program.id,
+  date: program.date.toISOString().split('T')[0],
+  formattedDate: formattedDate,
+  venue: program.venue,
+  coverImageUrl: program.coverImageUrl, 
+  showCoverText: program.showCoverText,
+  coverTextColor: program.coverTextColor,
+  createdAt: program.createdAt
+},
       sections: sections,
       stats: {
         totalSections: sections.length,
