@@ -877,42 +877,38 @@ cleanupAuth() {
   }
 }
 
-  // =============================================
-  // 📤 SEND TO USER
-  // =============================================
-  async sendToUser(phoneNumber, message) {
+    async sendToUser(phoneNumber, message) {
     if (!this.sock || !this.isConnected) {
       throw new Error('Bot is not connected to WhatsApp');
     }
 
     try {
-      let cleanNumber = phoneNumber.replace(/[^0-9]/g, '');
-      
-      if (cleanNumber.startsWith('0')) {
-        cleanNumber = '254' + cleanNumber.substring(1);
-      } else if (!cleanNumber.startsWith('254') && cleanNumber.length === 10) {
-        cleanNumber = '254' + cleanNumber;
-      } else if (!cleanNumber.startsWith('254')) {
-        cleanNumber = '254' + cleanNumber;
+      let jid;
+      // Check if we are sending to an @lid directly
+      if (phoneNumber.includes('@lid')) {
+        jid = phoneNumber;
+      } else {
+        let cleanNumber = phoneNumber.replace(/[^0-9]/g, '');
+        
+        if (cleanNumber.startsWith('0')) {
+          cleanNumber = '254' + cleanNumber.substring(1);
+        } else if (!cleanNumber.startsWith('254') && cleanNumber.length === 10) {
+          cleanNumber = '254' + cleanNumber;
+        } else if (!cleanNumber.startsWith('254')) {
+          cleanNumber = '254' + cleanNumber;
+        }
+        
+        jid = `${cleanNumber}@s.whatsapp.net`;
       }
-      
-      let jid = `${cleanNumber}@s.whatsapp.net`;
 
-      const result = await this.sock.sendMessage(
-    groupId,
-    {
-        text: message
-    },
-    quoted ? { quoted } : {}
-);
-      console.log(`✅ Message sent to ${phoneNumber}`);
+      const result = await this.sock.sendMessage(jid, { text: message });
+      console.log(`✅ Message sent to ${jid}`);
       
-      // ✅ Track message
       if (result && result.key && result.key.id) {
         await prisma.whatsAppMessage.create({
           data: {
             messageId: result.key.id,
-            phoneNumber: phoneNumber,
+            phoneNumber: jid,
             message: message,
             originalMessage: message,
             type: 'user',
@@ -920,7 +916,6 @@ cleanupAuth() {
             sentAt: new Date()
           }
         });
-        console.log(`📝 Message tracked: ${result.key.id}`);
       }
       
       return result;
@@ -1019,9 +1014,9 @@ cleanupAuth() {
     // Log for debugging
     console.log(`🔑 Bot Number: ${botNumber}, LID: ${lidNumber || 'null'}`);
     
-    // Ignore own messages
-    if (sender === botId || from === botId || sender?.includes(botNumber)) {
-      console.log(`⏭️ Ignoring own message`);
+    // Ignore own messages and echoes from the Admin UI
+    if (msg.key.fromMe || sender === botId || from === botId || sender?.includes(botNumber)) {
+      console.log(`⏭️ Ignoring own message/echo`);
       return;
     }
 
@@ -1031,6 +1026,65 @@ cleanupAuth() {
                  '';
 
     if (!text) return;
+
+    try {
+      let resolvedName = msg.pushName;
+      
+      if (!resolvedName || resolvedName.trim() === '') {
+        let lookupJid = sender;
+        
+        if (sender.includes('@lid')) {
+          try {
+            const pn = await this.sock.signalRepository.lidMapping.getPNForLID(sender);
+            if (pn) lookupJid = pn;
+          } catch (e) {}
+        }
+
+        try {
+          const contact = this.sock.store?.contacts?.[lookupJid] || this.sock.store?.contacts?.[sender];
+          if (contact && contact.name) {
+            resolvedName = contact.name;
+          } else if (contact && contact.verifiedName) {
+            resolvedName = contact.verifiedName;
+          } else {
+            resolvedName = lookupJid.split('@')[0];
+          }
+        } catch (e) {
+          resolvedName = lookupJid.split('@')[0];
+        }
+      }
+
+      let profilePicUrl = null;
+      try {
+        profilePicUrl = await this.getProfilePicture(sender);
+      } catch (e) {}
+
+      await prisma.chatHistory.create({
+        data: {
+          chatId: from,
+          senderName: resolvedName,
+          senderJid: sender,
+          text: text,
+          isFromMe: false,
+          profilePic: profilePicUrl 
+        }
+      });
+      
+      if (global.io) {
+        global.io.emit('new_whatsapp_message', {
+          chatId: from,
+          senderName: resolvedName,
+          text: text,
+          timestamp: new Date(),
+          profilePic: profilePicUrl
+        });
+      }
+
+      console.log(`✅ Saved message from ${resolvedName}`);
+    } catch (err) {
+      console.error('❌ Failed to save incoming message to DB:', err.message);
+    }
+    // -----------------------------------------------------------
 
     console.log(`📩 Message from ${from}: ${text.substring(0, 50)}`);
 
@@ -1772,6 +1826,16 @@ async removeActiveGroup(groupId) {
   async isInGroup(groupId) {
     const groups = await this.getGroups();
     return groups.some(g => g.id === groupId);
+  }
+
+    async getProfilePicture(jid) {
+    try {
+      if (!this.sock || !this.isConnected) return null;
+      const ppUrl = await this.sock.profilePictureUrl(jid, 'image');
+      return ppUrl;
+    } catch (error) {
+      return null;
+    }
   }
 
   // =============================================

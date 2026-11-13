@@ -2278,3 +2278,16 @@ model SemesterMembership {
   @@index([status])
   @@map("semester_memberships")
 }
+
+model ChatHistory {
+  id          String   @id @default(cuid())
+  chatId      String
+  senderName  String?
+  senderJid   String
+  text        String
+  isFromMe    Boolean  @default(false)
+  timestamp   DateTime @default(now())
+  profilePic  String?
+
+  @@index([chatId, timestamp])
+}

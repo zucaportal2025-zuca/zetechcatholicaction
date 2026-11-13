@@ -1635,6 +1635,12 @@ app.use('/api/admin/whatsapp', whatsappAdminRoutes);
 console.log('✅ WhatsApp Admin routes mounted');
 
 
+// ==================== WHATSAPP CHAT ROUTES ====================
+const whatsappChatRoutes = require('./routes/whatsapp.chat.routes');
+app.use('/api/whatsapp/chat', whatsappChatRoutes);
+console.log('✅ WhatsApp Chat routes mounted');
+
+
 //t
 const aiMessageAssistantRoutes = require("./routes/ai.routes");
 
