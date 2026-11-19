@@ -120,7 +120,9 @@ birthdayAdvertId    Int?     @unique
   //fb
   feedback         Feedback[] 
 
-    treasurerTransactions TreasurerTransaction[]
+  treasurerTransactions TreasurerTransaction[]
+  projectsCreated       Project[]              @relation("ProjectCreator")
+  attachmentsUploaded   TreasurerAttachment[]  @relation("AttachmentUploader")
 
     //bank
     bankPayments BankPayment[]
@@ -329,8 +331,8 @@ model ContributionType {
   id             String    @id @default(uuid())
   title          String
   description    String?
-  amountRequired Float      // Target amount
-  collectedAmount Float     @default(0)  // ← ADD THIS - actual amount collected
+  amountRequired Float
+  collectedAmount Float     @default(0)
   deadline       DateTime?
   createdAt      DateTime  @default(now())
   updatedAt      DateTime  @updatedAt
@@ -340,6 +342,11 @@ model ContributionType {
   paymentSlug    String?   @unique
   payments       Payment[]
   bankPayments BankPayment[]
+
+  semesterId String?   @db.Uuid
+  semester   Schedule? @relation(fields: [semesterId], references: [id], onDelete: SetNull)
+
+  @@index([semesterId])
 }
 model Pledge {
   id                 String           @id @default(uuid())
@@ -917,16 +924,23 @@ sheetAutoPushOnClose    Boolean @default(true) @map("sheetAutoPushOnClose")
   generalPoints   Json?   @map("general_points")
   additionalNotes String? @map("additional_notes") @db.Text
   semesterPeriod  Json?   @map("semester_period")
+    treasuryClosedAt       DateTime? @map("treasury_closed_at")
+  treasuryClosedBy       String?   @map("treasury_closed_by")
+  treasuryReopenCount    Int       @default(0) @map("treasury_reopen_count")
+  treasuryLastReopenedAt DateTime? @map("treasury_last_reopened_at")
+  treasuryLastReopenedBy String?   @map("treasury_last_reopened_by")
 
-   creator     User                 @relation(fields: [createdBy], references: [id])
+  creator     User                 @relation(fields: [createdBy], references: [id])
   events      ScheduleEvent[]
   attachments ScheduleAttachment[]
 
-  // opposite relation for ScheduledNotification
   notificationSchedules ScheduledNotification[]
-
-  // opposite relation for SemesterMembership
   memberships SemesterMembership[]
+
+  projects              Project[]
+  treasurerTransactions TreasurerTransaction[]
+  treasuryReopenLogs    SemesterReopenLog[]
+  contributionTypes     ContributionType[]
 
   @@map("Schedule")
 }
@@ -1788,26 +1802,36 @@ model MeetingComment {
   @@map("meeting_comments")
 }
 
-// Treasurer Ledger - Money IN/OUT tracking for treasurer reports
 model TreasurerTransaction {
-  id          String   @id @default(uuid())
-  date        DateTime
-  description String
-  category    String
-  type        String   // "IN" or "OUT"
-  amount      Float
-  reference   String?
-  notes       String?  @db.Text
-  createdBy   String   @db.Uuid
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
+  id           String    @id @default(uuid()) @db.Uuid
+  date         DateTime
+  description  String
+  category     String
+  type         String
+  amount       Float
+  reference    String?
+  notes        String?   @db.Text
+  createdBy    String
+  createdAt    DateTime  @default(now())
+  updatedAt    DateTime  @updatedAt
+  semesterId   String?   @db.Uuid
+  projectId    String?   @db.Uuid
+  deletedAt    DateTime?
+  deletedBy    String?
+  deleteReason String?   @db.Text
 
   user        User     @relation(fields: [createdBy], references: [id], onDelete: Cascade)
+  semester    Schedule? @relation(fields: [semesterId], references: [id], onDelete: SetNull)
+  project     Project?  @relation(fields: [projectId], references: [id], onDelete: SetNull)
+  attachments TreasurerAttachment[]
 
   @@index([date])
   @@index([type])
   @@index([category])
   @@index([createdBy])
+  @@index([semesterId])
+  @@index([projectId])
+  @@index([deletedAt])
   @@map("treasurer_transactions")
 }
 
@@ -2290,4 +2314,67 @@ model ChatHistory {
   profilePic  String?
 
   @@index([chatId, timestamp])
+}
+
+model Project {
+  id           String    @id @default(uuid()) @db.Uuid
+  semesterId   String    @db.Uuid
+  name         String
+  description  String?   @db.Text
+  targetAmount Float?
+  startDate    DateTime?
+  endDate      DateTime?
+  status       String    @default("OPEN")
+  createdBy    String
+  createdAt    DateTime  @default(now())
+  updatedAt    DateTime  @updatedAt
+  deletedAt    DateTime?
+  deletedBy    String?
+
+  semester     Schedule              @relation(fields: [semesterId], references: [id], onDelete: Cascade)
+  creator      User                  @relation("ProjectCreator", fields: [createdBy], references: [id])
+  transactions TreasurerTransaction[]
+
+  @@index([semesterId])
+  @@index([status])
+  @@index([deletedAt])
+  @@map("projects")
+}
+
+model TreasurerAttachment {
+  id                 String    @id @default(uuid())
+  transactionId      String    @db.Uuid
+  cloudinaryUrl      String
+  cloudinaryPublicId String
+  fileType           String
+  fileName           String
+  fileSize           Int
+  mimeType           String?
+  uploadedBy         String
+  uploadedAt         DateTime  @default(now())
+  deletedAt          DateTime?
+
+  transaction TreasurerTransaction @relation(fields: [transactionId], references: [id], onDelete: Cascade)
+  uploader    User                 @relation("AttachmentUploader", fields: [uploadedBy], references: [id])
+
+  @@index([transactionId])
+  @@index([deletedAt])
+  @@map("treasurer_attachments")
+}
+
+model SemesterReopenLog {
+  id             String    @id @default(uuid())
+  semesterId     String    @db.Uuid
+  reason         String    @db.Text
+  reopenedBy     String
+  reopenedByName String
+  reopenedAt     DateTime  @default(now())
+  closedAgainAt  DateTime?
+  closedAgainBy  String?
+
+  semester Schedule @relation(fields: [semesterId], references: [id], onDelete: Cascade)
+
+  @@index([semesterId])
+  @@index([reopenedAt])
+  @@map("semester_reopen_logs")
 }

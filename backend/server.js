@@ -1555,6 +1555,15 @@ const treasurerReportsRoutes = require("./routes/treasurerReports");
 
 app.use("/api/treasurer", treasurerReportsRoutes);
 
+const treasurerProjectRoutes = require("./routes/treasurerProjectRoutes");
+app.use("/api/treasurer/projects", treasurerProjectRoutes);
+
+const treasurerSemesterRoutes = require("./routes/treasurerSemesterRoutes");
+app.use("/api/treasurer/semester", treasurerSemesterRoutes);
+
+const treasurerReportDataRoutes = require("./routes/treasurerReportDataRoutes");
+app.use("/api/treasurer/reports", treasurerReportDataRoutes);
+
 const ibmRoutes = require("./routes/ibmRoutes");
 app.use("/api/ibm", ibmRoutes);
 
