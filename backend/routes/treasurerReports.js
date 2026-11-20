@@ -126,11 +126,14 @@ router.get("/campaign-summary", authenticate, async (req, res) => {
     const isAuthorized = await isTreasurerOrAdmin(userId);
     if (!isAuthorized) return res.status(403).json({ error: "Not authorized" });
 
-    const cacheKey = `campaign_summary_global`;
+    const cacheKey = `campaign_summary_${req.query.semesterId || "active"}`;
     const cached = getCached(cacheKey);
     if (cached) return res.json(cached);
 
-    const activeSemester = await getActiveSemester(prisma);
+    const chosenId = req.query.semesterId;
+    const activeSemester = chosenId
+      ? await prisma.schedule.findUnique({ where: { id: chosenId }, select: { id: true, title: true } })
+      : await getActiveSemester(prisma);
 
     const campaigns = await prisma.contributionType.findMany({
       where: activeSemester?.id ? { semesterId: activeSemester.id } : {},
@@ -231,8 +234,10 @@ router.get("/member-summary", authenticate, async (req, res) => {
     const cached = getCached(cacheKey);
     if (cached) return res.json(cached);
 
-    const { search, jumuiaId, statusFilter } = req.query;
-    const activeSemester = await getActiveSemester(prisma);
+    const { search, jumuiaId, statusFilter, semesterId } = req.query;
+    const activeSemester = semesterId
+      ? await prisma.schedule.findUnique({ where: { id: semesterId }, select: { id: true, title: true } })
+      : await getActiveSemester(prisma);
 
     let whereClause = {
       AND: [
