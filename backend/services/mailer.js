@@ -158,13 +158,22 @@ function renderEmailLayout({ variant = 'newsletter', title, greeting, body, acti
     </html>
   `;
 
+  // ==========================================
+  // VARIANT 1: SECURITY (Verification / Reset)
+  // ==========================================
   if (variant === 'security') {
     const code = escapeHtml(data.code || '');
     const label = escapeHtml(data.label || 'Verification code');
 
     return outerTable(`
       <tr>
-        <td style="padding: 36px 28px 24px 28px; text-align: center; background-color: #ffffff;">
+        <td style="background-color: #ffffff; padding: 20px 28px 10px 28px; text-align: center; border-bottom: 1px solid #f0f0f0;">
+          <img src="${ZUCA_LOGO_URL}" alt="ZUCA" width="36" height="36" style="display: inline-block; width: 36px; height: 36px; border-radius: 50%; border: 0;">
+          <div style="font-size: 12px; font-weight: 700; color: #333333; margin-top: 6px; letter-spacing: 0.5px;">Zetech University Catholic Action</div>
+        </td>
+      </tr>
+      <tr>
+        <td style="padding: 28px 28px 24px 28px; text-align: center; background-color: #ffffff;">
           <div style="font-size: 11px; letter-spacing: 2px; text-transform: uppercase; color: #8a8a8a; margin-bottom: 14px;">${label}</div>
           <div style="font-size: 42px; font-weight: 800; font-family: 'Courier New', Courier, monospace; letter-spacing: 10px; color: #111111; line-height: 1.2;">${code}</div>
           <div style="font-size: 12px; color: #8a8a8a; margin-top: 14px;">Valid for 15 minutes</div>
@@ -178,13 +187,16 @@ function renderEmailLayout({ variant = 'newsletter', title, greeting, body, acti
       </tr>
       <tr>
         <td style="border-top: 1px solid #eeeeee; padding: 18px 28px; text-align: center;">
-          <p style="font-size: 11px; color: #9a9a9a; margin: 0 0 4px 0;">Zetech University Catholic Action</p>
+          <p style="font-size: 11px; color: #9a9a9a; margin: 0 0 4px 0;">Zetech University Catholic Action (ZUCA)</p>
           <p style="font-size: 10px; color: #b5b5b5; margin: 0;">Automated security message. Do not reply.</p>
         </td>
       </tr>
     `);
   }
 
+  // ==========================================
+  // VARIANT 2: RECEIPT (Financial)
+  // ==========================================
   if (variant === 'receipt') {
     const receiptNumber = escapeHtml(data.receiptNumber || 'N/A');
     const receiptDate = escapeHtml(data.date || '');
@@ -196,15 +208,24 @@ function renderEmailLayout({ variant = 'newsletter', title, greeting, body, acti
 
     return outerTable(`
       <tr>
-        <td style="background-color: #1f1f1f; padding: 20px 28px;">
-          <div style="font-size: 11px; letter-spacing: 2px; text-transform: uppercase; color: #b8b8b8; margin-bottom: 6px;">Official Payment Receipt</div>
-          <div style="font-size: 16px; font-weight: 700; color: #ffffff;">Zetech University Catholic Action</div>
+        <td style="background-color: #ffffff; padding: 20px 28px; border-bottom: 3px solid ${ZUCA_GREEN};">
+          <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0">
+            <tr>
+              <td style="vertical-align: middle;">
+                <img src="${ZUCA_LOGO_URL}" alt="ZUCA" width="40" height="40" style="display: block; width: 40px; height: 40px; border-radius: 50%; border: 0;">
+              </td>
+              <td style="vertical-align: middle; padding-left: 12px;">
+                <div style="font-size: 14px; font-weight: 700; color: #111111; line-height: 1.2;">Zetech University Catholic Action</div>
+                <div style="font-size: 10px; color: ${ZUCA_GREEN}; margin-top: 2px; letter-spacing: 1px; text-transform: uppercase;">Official Payment Receipt</div>
+              </td>
+            </tr>
+          </table>
         </td>
       </tr>
       <tr>
-        <td style="padding: 28px 28px 8px 28px;">
-          <div style="font-size: 11px; letter-spacing: 1px; text-transform: uppercase; color: #8a8a8a; margin-bottom: 6px;">Amount Paid</div>
-          <div style="font-size: 34px; font-weight: 800; color: ${ZUCA_GREEN}; line-height: 1.1;">KES ${amount}</div>
+        <td style="background-color: #1f1f1f; padding: 20px 28px;">
+          <div style="font-size: 11px; letter-spacing: 2px; text-transform: uppercase; color: #b8b8b8; margin-bottom: 6px;">Amount Paid</div>
+          <div style="font-size: 34px; font-weight: 800; color: #ffffff; line-height: 1.1;">KES ${amount}</div>
           <div style="margin-top: 10px;">
             <span style="display: inline-block; background-color: ${ZUCA_GREEN}; color: #ffffff; font-size: 11px; font-weight: 700; letter-spacing: 1px; padding: 5px 12px; border-radius: 3px; text-transform: uppercase;">Completed</span>
           </div>
@@ -251,6 +272,9 @@ function renderEmailLayout({ variant = 'newsletter', title, greeting, body, acti
     `);
   }
 
+  // ==========================================
+  // VARIANT 3: ALERT (Notices / Reminders)
+  // ==========================================
   if (variant === 'alert') {
     const alertType = data.alertType || 'warning';
     let accent = '#f59e0b';
@@ -279,6 +303,20 @@ function renderEmailLayout({ variant = 'newsletter', title, greeting, body, acti
     ` : '';
 
     return outerTable(`
+      <tr>
+        <td style="background-color: #ffffff; padding: 20px 28px; border-bottom: 1px solid #f0f0f0;">
+          <table role="presentation" cellpadding="0" cellspacing="0" border="0">
+            <tr>
+              <td style="vertical-align: middle;">
+                <img src="${ZUCA_LOGO_URL}" alt="ZUCA" width="32" height="32" style="display: block; width: 32px; height: 32px; border-radius: 50%; border: 0;">
+              </td>
+              <td style="vertical-align: middle; padding-left: 10px;">
+                <div style="font-size: 13px; font-weight: 700; color: #111111;">Zetech University Catholic Action</div>
+              </td>
+            </tr>
+          </table>
+        </td>
+      </tr>
       <tr>
         <td style="padding: 24px 28px 16px 28px;">
           <span style="display: inline-block; background-color: ${badgeBg}; color: ${badgeText}; font-size: 11px; font-weight: 700; letter-spacing: 1px; padding: 5px 12px; border-radius: 3px; text-transform: uppercase;">${badgeLabel}</span>
@@ -312,6 +350,9 @@ function renderEmailLayout({ variant = 'newsletter', title, greeting, body, acti
     `);
   }
 
+  // ==========================================
+  // VARIANT 4: MEDIA (YouTube)
+  // ==========================================
   if (variant === 'media') {
     const isLive = !!data.isLive;
     const thumbnail = escapeHtml(data.thumbnail || '');
@@ -323,6 +364,20 @@ function renderEmailLayout({ variant = 'newsletter', title, greeting, body, acti
       : '';
 
     return outerTable(`
+      <tr>
+        <td style="background-color: #111111; padding: 16px 28px;">
+          <table role="presentation" cellpadding="0" cellspacing="0" border="0">
+            <tr>
+              <td style="vertical-align: middle;">
+                <img src="${ZUCA_LOGO_URL}" alt="ZUCA" width="32" height="32" style="display: block; width: 32px; height: 32px; border-radius: 50%; border: 0;">
+              </td>
+              <td style="vertical-align: middle; padding-left: 10px;">
+                <div style="font-size: 13px; font-weight: 700; color: #ffffff;">Zetech University Catholic Action</div>
+              </td>
+            </tr>
+          </table>
+        </td>
+      </tr>
       ${thumbnail ? `
       <tr>
         <td style="padding: 0;">
@@ -356,6 +411,9 @@ function renderEmailLayout({ variant = 'newsletter', title, greeting, body, acti
     `);
   }
 
+  // ==========================================
+  // VARIANT 5: NEWSLETTER (Announcements / Welcome)
+  // ==========================================
   const amountBlock = data.amount ? `
     <tr>
       <td style="padding: 0 28px 8px 28px;">
