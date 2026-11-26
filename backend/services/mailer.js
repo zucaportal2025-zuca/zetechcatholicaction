@@ -563,7 +563,7 @@ If you did not request this verification, please ignore this email.
 
 Zetech University Catholic Action (ZUCA)`;
 
-    await sendViaBrevo(user.email, `[ZUCA] Email Verification Code: ${verificationCode}`, htmlContent, textContent, "ZUCA");
+    await sendViaBrevo(user.email, `(${verificationCode})Email Verification Code: `, htmlContent, textContent, "ZUCA");
     return true;
   } catch (error) {
     return false;
@@ -594,7 +594,7 @@ If you did not request this reset, please ignore this email.
 
 Zetech University Catholic Action (ZUCA)`;
 
-    await sendViaBrevo(email, `[ZUCA] Password Reset Code: ${resetCode}`, htmlContent, textContent, "ZUCA");
+    await sendViaBrevo(email, `( ${resetCode}) Password Reset Code:`, htmlContent, textContent, "ZUCA");
     return true;
   } catch (error) {
     return false;
