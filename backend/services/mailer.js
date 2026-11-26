@@ -80,13 +80,24 @@ function getCurrentDateTime() {
   });
 }
 
+function escapeHtml(value) {
+  if (value === null || value === undefined) return '';
+  return String(value)
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;');
+}
+
 function formatTextToHtml(text) {
   if (!text) return '';
 
-  const paragraphs = text.split(/\n\s*\n/);
+  const safeText = escapeHtml(text);
+  const paragraphs = safeText.split(/\n\s*\n/);
 
-  return paragraphs.map(p => {
-    const lines = p.split('\n');
+  return paragraphs.map(paragraph => {
+    const lines = paragraph.split('\n');
     let inList = false;
     let html = '';
 
@@ -95,7 +106,7 @@ function formatTextToHtml(text) {
 
       if (trimmed.startsWith('-') || trimmed.startsWith('•')) {
         if (!inList) {
-          html += '<ul style="margin: 12px 0; padding-left: 24px; color: #444444;">';
+          html += '<ul style="margin: 12px 0; padding-left: 22px; color: #3a3a3a; font-size: 14px; line-height: 1.7;">';
           inList = true;
         }
         html += `<li style="margin-bottom: 8px;">${trimmed.substring(1).trim()}</li>`;
@@ -105,7 +116,8 @@ function formatTextToHtml(text) {
           inList = false;
         }
         if (trimmed !== '') {
-          html += `<p style="margin: 0 0 14px 0; color: #444444;">${trimmed}</p>`;
+          const formatted = trimmed.replace(/\*\*(.+?)\*\*/g, '<strong style="color: #111111;">$1</strong>');
+          html += `<p style="margin: 0 0 14px 0; color: #3a3a3a; font-size: 14px; line-height: 1.7;">${formatted}</p>`;
         }
       }
     });
@@ -115,135 +127,29 @@ function formatTextToHtml(text) {
   }).join('');
 }
 
-function renderEmailLayout({ variant = 'newsletter', title, greeting, body, actionUrl, buttonText, data = {} }) {
+function renderEmailLayout({ variant = 'newsletter', title, greeting, body, actionUrl, buttonText, preheader, data = {} }) {
   const currentYear = new Date().getFullYear();
+  const safeTitle = escapeHtml(title || '');
+  const safeGreeting = escapeHtml(greeting || '');
+  const safePreheader = escapeHtml(preheader || safeTitle);
+  const hiddenPreheader = `<div style="display: none; max-height: 0; overflow: hidden; font-size: 1px; line-height: 1px; color: #ffffff; opacity: 0;">${safePreheader}</div>`;
 
-  const header = `
-    <div style="background-color: ${ZUCA_GREEN}; padding: 24px 30px; border-bottom: 3px solid ${ZUCA_GOLD};">
-      <img src="${ZUCA_LOGO_URL}" alt="ZUCA Logo" style="width: 56px; height: 56px; border-radius: 50%; object-fit: cover; display: block;">
-      <div style="color: #ffffff; font-size: 17px; font-weight: 600; margin-top: 10px;">Zetech University Catholic Action</div>
-    </div>
-  `;
-
-  const footer = `
-    <div style="background-color: #f8f9fa; padding: 20px 30px; text-align: center; border-top: 1px solid #e9ecef;">
-      <p style="font-size: 12px; color: #6c757d; margin: 0 0 6px 0;">
-        Zetech University Catholic Action (ZUCA)<br>
-        Copyright ${currentYear} ZUCA. All rights reserved.
-      </p>
-      <p style="font-size: 11px; color: #adb5bd; margin: 0;">
-        This is an automated message. Please do not reply directly to this email.
-      </p>
-    </div>
-  `;
-
-  let content = '';
-  let wrapperStyle = 'max-width: 600px; margin: 0 auto; background: #ffffff; font-family: Arial, Helvetica, sans-serif; line-height: 1.6;';
-
-  if (variant === 'security') {
-    content = `
-      <div style="padding: 40px 30px; text-align: center;">
-        <h2 style="color: #333333; margin-top: 0; font-size: 22px; font-weight: 600;">${title}</h2>
-        <p style="color: #555555; font-size: 15px; margin: 16px 0;">${greeting}</p>
-        <div style="background: #f8f9fa; border: 1px solid #dee2e6; border-radius: 6px; padding: 24px; margin: 30px 0;">
-          <strong style="font-size: 12px; color: #666666; letter-spacing: 1px; text-transform: uppercase;">Your Code</strong>
-          <div style="font-size: 36px; font-weight: 700; font-family: Courier New, monospace; color: ${ZUCA_GREEN}; letter-spacing: 6px; margin: 16px 0;">${data.code}</div>
-          <div style="font-size: 12px; color: #888888;">Valid for 15 minutes</div>
-        </div>
-        <p style="font-size: 13px; color: #888888; margin-top: 30px;">If you did not request this, please ignore this email.</p>
-      </div>
-    `;
-  } else if (variant === 'receipt') {
-    content = `
-      <div style="padding: 30px;">
-        <h2 style="color: ${ZUCA_GREEN}; border-bottom: 2px solid ${ZUCA_GREEN}; padding-bottom: 10px; margin-top: 0; font-size: 18px; font-weight: 600;">OFFICIAL PAYMENT RECEIPT</h2>
-
-        <table style="width: 100%; border-collapse: collapse; margin-top: 20px; font-size: 14px;">
-          <tr><td style="padding: 10px 0; border-bottom: 1px solid #eeeeee; color: #666666; width: 40%;">Receipt Number:</td><td style="padding: 10px 0; border-bottom: 1px solid #eeeeee; font-weight: 600; color: #333333;">${data.receiptNumber}</td></tr>
-          <tr><td style="padding: 10px 0; border-bottom: 1px solid #eeeeee; color: #666666;">Date:</td><td style="padding: 10px 0; border-bottom: 1px solid #eeeeee; font-weight: 600; color: #333333;">${data.date}</td></tr>
-          <tr><td style="padding: 10px 0; border-bottom: 1px solid #eeeeee; color: #666666;">Received From:</td><td style="padding: 10px 0; border-bottom: 1px solid #eeeeee; font-weight: 600; color: #333333;">${data.senderName}</td></tr>
-          <tr><td style="padding: 10px 0; border-bottom: 1px solid #eeeeee; color: #666666;">Campaign:</td><td style="padding: 10px 0; border-bottom: 1px solid #eeeeee; font-weight: 600; color: #333333;">${data.campaignTitle}</td></tr>
-          <tr><td style="padding: 10px 0; border-bottom: 1px solid #eeeeee; color: #666666;">Method:</td><td style="padding: 10px 0; border-bottom: 1px solid #eeeeee; font-weight: 600; color: #333333;">M-PESA</td></tr>
-          <tr><td style="padding: 16px 0; color: #666666;">Amount:</td><td style="padding: 16px 0; font-weight: 700; font-size: 20px; color: ${ZUCA_GREEN};">KES ${data.amount}</td></tr>
-        </table>
-
-        <div style="margin-top: 30px; text-align: center; border-top: 1px solid #eeeeee; padding-top: 20px;">
-          <p style="font-size: 12px; color: #888888; margin: 0;">This is an official receipt from Zetech University Catholic Action.</p>
-        </div>
-      </div>
-    `;
-  } else if (variant === 'alert') {
-    const borderColor = data.alertType === 'error' ? '#ef4444' : data.alertType === 'success' ? '#10b981' : '#f59e0b';
-    content = `
-      <div style="padding: 30px;">
-        <div style="border-left: 4px solid ${borderColor}; background: #f8f9fa; padding: 20px; margin-bottom: 24px;">
-          <h2 style="color: #333333; margin: 0 0 8px 0; font-size: 18px; font-weight: 600;">${title}</h2>
-          <p style="color: #555555; margin: 0; font-size: 14px;">${greeting}</p>
-        </div>
-        <div style="font-size: 14px; color: #444444; line-height: 1.6;">
-          ${formatTextToHtml(body)}
-        </div>
-        ${actionUrl ? `
-        <div style="text-align: center; margin-top: 30px;">
-          <a href="${actionUrl}" style="display: inline-block; background: ${ZUCA_GREEN}; color: #ffffff; text-decoration: none; padding: 12px 28px; border-radius: 4px; font-weight: 600; font-size: 14px;">${buttonText || 'View Details'}</a>
-        </div>
-        ` : ''}
-      </div>
-    `;
-  } else if (variant === 'media') {
-    content = `
-      <div style="padding: 30px;">
-        <h2 style="color: #333333; margin-top: 0; font-size: 20px; font-weight: 600;">${title}</h2>
-        <p style="color: #555555; font-size: 14px; margin: 12px 0 20px 0;">${greeting}</p>
-        <div style="text-align: center; margin: 20px 0;">
-          <img src="${data.thumbnail}" alt="Video Thumbnail" style="max-width: 100%; border-radius: 6px; border: 1px solid #e9ecef;">
-          <p style="font-size: 14px; color: #444444; margin-top: 12px; font-weight: 600;">${data.videoTitle}</p>
-          ${data.isLive ? '<div style="background: #ef4444; color: #ffffff; display: inline-block; padding: 4px 14px; border-radius: 4px; font-size: 12px; font-weight: 600; margin-top: 8px;">LIVE NOW</div>' : ''}
-        </div>
-        <div style="text-align: center; margin-top: 24px;">
-          <a href="${actionUrl}" style="display: inline-block; background: ${data.isLive ? '#ef4444' : ZUCA_GREEN}; color: #ffffff; text-decoration: none; padding: 12px 28px; border-radius: 4px; font-weight: 600; font-size: 14px;">${buttonText}</a>
-        </div>
-      </div>
-    `;
-  } else {
-    content = `
-      <div style="padding: 30px;">
-        <h2 style="color: ${ZUCA_GREEN}; border-bottom: 2px solid #e9ecef; padding-bottom: 12px; margin-top: 0; font-size: 20px; font-weight: 600;">${title}</h2>
-        <p style="color: #555555; font-size: 15px; margin: 16px 0;">${greeting}</p>
-        <div style="font-size: 14px; color: #444444; line-height: 1.6;">
-          ${formatTextToHtml(body)}
-        </div>
-        ${data.amount ? `
-        <div style="background: #f8f9fa; padding: 20px; margin: 24px 0; text-align: center; border-radius: 6px; border: 1px solid #dee2e6;">
-          <strong style="font-size: 12px; color: #666666; letter-spacing: 1px; text-transform: uppercase;">Amount</strong>
-          <div style="font-size: 24px; font-weight: 700; color: ${ZUCA_GREEN}; margin-top: 8px;">KES ${data.amount.toLocaleString()}</div>
-        </div>
-        ` : ''}
-        ${actionUrl ? `
-        <div style="text-align: center; margin-top: 30px;">
-          <a href="${actionUrl}" style="display: inline-block; background: ${ZUCA_GREEN}; color: #ffffff; text-decoration: none; padding: 12px 28px; border-radius: 4px; font-weight: 600; font-size: 14px;">${buttonText || 'View Details'}</a>
-        </div>
-        ` : ''}
-      </div>
-    `;
-  }
-
-  return `
+  const outerTable = (innerContent) => `
     <!DOCTYPE html>
-    <html>
+    <html lang="en">
     <head>
       <meta charset="UTF-8">
       <meta name="viewport" content="width=device-width, initial-scale=1.0">
-      <title>${title}</title>
+      <meta http-equiv="X-UA-Compatible" content="IE=edge">
+      <title>${safeTitle}</title>
     </head>
-    <body style="margin: 0; padding: 0; background-color: #f5f5f5;">
-      <table width="100%" cellpadding="0" cellspacing="0" border="0" style="background-color: #f5f5f5; padding: 20px 0;">
+    <body style="margin: 0; padding: 0; background-color: #eef0f2;">
+      ${hiddenPreheader}
+      <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="background-color: #eef0f2; padding: 24px 12px;">
         <tr>
           <td align="center">
-            <table width="100%" cellpadding="0" cellspacing="0" border="0" style="${wrapperStyle}">
-              <tr><td>${header}</td></tr>
-              <tr><td>${content}</td></tr>
-              <tr><td>${footer}</td></tr>
+            <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="max-width: 600px; width: 100%; background-color: #ffffff; font-family: Arial, Helvetica, sans-serif;">
+              ${innerContent}
             </table>
           </td>
         </tr>
@@ -251,6 +157,263 @@ function renderEmailLayout({ variant = 'newsletter', title, greeting, body, acti
     </body>
     </html>
   `;
+
+  if (variant === 'security') {
+    const code = escapeHtml(data.code || '');
+    const label = escapeHtml(data.label || 'Verification code');
+
+    return outerTable(`
+      <tr>
+        <td style="padding: 36px 28px 24px 28px; text-align: center; background-color: #ffffff;">
+          <div style="font-size: 11px; letter-spacing: 2px; text-transform: uppercase; color: #8a8a8a; margin-bottom: 14px;">${label}</div>
+          <div style="font-size: 42px; font-weight: 800; font-family: 'Courier New', Courier, monospace; letter-spacing: 10px; color: #111111; line-height: 1.2;">${code}</div>
+          <div style="font-size: 12px; color: #8a8a8a; margin-top: 14px;">Valid for 15 minutes</div>
+        </td>
+      </tr>
+      <tr>
+        <td style="padding: 0 28px 28px 28px;">
+          <p style="font-size: 15px; color: #222222; margin: 0 0 14px 0; line-height: 1.6;">${safeGreeting}</p>
+          <div style="font-size: 14px; color: #4a4a4a; line-height: 1.7;">${formatTextToHtml(body)}</div>
+        </td>
+      </tr>
+      <tr>
+        <td style="border-top: 1px solid #eeeeee; padding: 18px 28px; text-align: center;">
+          <p style="font-size: 11px; color: #9a9a9a; margin: 0 0 4px 0;">Zetech University Catholic Action</p>
+          <p style="font-size: 10px; color: #b5b5b5; margin: 0;">Automated security message. Do not reply.</p>
+        </td>
+      </tr>
+    `);
+  }
+
+  if (variant === 'receipt') {
+    const receiptNumber = escapeHtml(data.receiptNumber || 'N/A');
+    const receiptDate = escapeHtml(data.date || '');
+    const senderName = escapeHtml(data.senderName || 'N/A');
+    const senderPhone = escapeHtml(data.senderPhone || '');
+    const campaignTitle = escapeHtml(data.campaignTitle || 'Contribution');
+    const jumuiaName = data.jumuiaName ? escapeHtml(data.jumuiaName) : '';
+    const amount = escapeHtml(data.amount || '0');
+
+    return outerTable(`
+      <tr>
+        <td style="background-color: #1f1f1f; padding: 20px 28px;">
+          <div style="font-size: 11px; letter-spacing: 2px; text-transform: uppercase; color: #b8b8b8; margin-bottom: 6px;">Official Payment Receipt</div>
+          <div style="font-size: 16px; font-weight: 700; color: #ffffff;">Zetech University Catholic Action</div>
+        </td>
+      </tr>
+      <tr>
+        <td style="padding: 28px 28px 8px 28px;">
+          <div style="font-size: 11px; letter-spacing: 1px; text-transform: uppercase; color: #8a8a8a; margin-bottom: 6px;">Amount Paid</div>
+          <div style="font-size: 34px; font-weight: 800; color: ${ZUCA_GREEN}; line-height: 1.1;">KES ${amount}</div>
+          <div style="margin-top: 10px;">
+            <span style="display: inline-block; background-color: ${ZUCA_GREEN}; color: #ffffff; font-size: 11px; font-weight: 700; letter-spacing: 1px; padding: 5px 12px; border-radius: 3px; text-transform: uppercase;">Completed</span>
+          </div>
+        </td>
+      </tr>
+      <tr>
+        <td style="padding: 20px 28px 8px 28px;">
+          <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="font-size: 14px;">
+            <tr>
+              <td style="padding: 10px 0; border-bottom: 1px solid #eeeeee; color: #7a7a7a; width: 42%;">Receipt Number</td>
+              <td style="padding: 10px 0; border-bottom: 1px solid #eeeeee; color: #111111; font-weight: 600;">${receiptNumber}</td>
+            </tr>
+            <tr>
+              <td style="padding: 10px 0; border-bottom: 1px solid #eeeeee; color: #7a7a7a;">Date</td>
+              <td style="padding: 10px 0; border-bottom: 1px solid #eeeeee; color: #111111; font-weight: 600;">${receiptDate}</td>
+            </tr>
+            <tr>
+              <td style="padding: 10px 0; border-bottom: 1px solid #eeeeee; color: #7a7a7a;">Received From</td>
+              <td style="padding: 10px 0; border-bottom: 1px solid #eeeeee; color: #111111; font-weight: 600;">${senderName}</td>
+            </tr>
+            ${senderPhone ? `<tr><td style="padding: 10px 0; border-bottom: 1px solid #eeeeee; color: #7a7a7a;">Phone Number</td><td style="padding: 10px 0; border-bottom: 1px solid #eeeeee; color: #111111; font-weight: 600;">${senderPhone}</td></tr>` : ''}
+            ${jumuiaName ? `<tr><td style="padding: 10px 0; border-bottom: 1px solid #eeeeee; color: #7a7a7a;">Jumuia</td><td style="padding: 10px 0; border-bottom: 1px solid #eeeeee; color: #111111; font-weight: 600;">${jumuiaName}</td></tr>` : ''}
+            <tr>
+              <td style="padding: 10px 0; border-bottom: 1px solid #eeeeee; color: #7a7a7a;">Campaign</td>
+              <td style="padding: 10px 0; border-bottom: 1px solid #eeeeee; color: #111111; font-weight: 600;">${campaignTitle}</td>
+            </tr>
+            <tr>
+              <td style="padding: 10px 0; border-bottom: 1px solid #eeeeee; color: #7a7a7a;">Payment Method</td>
+              <td style="padding: 10px 0; border-bottom: 1px solid #eeeeee; color: #111111; font-weight: 600;">M-PESA</td>
+            </tr>
+          </table>
+        </td>
+      </tr>
+      <tr>
+        <td style="padding: 20px 28px 32px 28px;">
+          <p style="font-size: 12px; color: #8a8a8a; margin: 0; line-height: 1.6;">This is an official receipt from Zetech University Catholic Action. Retain this message for your records.</p>
+        </td>
+      </tr>
+      <tr>
+        <td style="background-color: #f7f7f7; padding: 16px 28px; text-align: center; border-top: 1px solid #ececec;">
+          <p style="font-size: 11px; color: #9a9a9a; margin: 0;">Zetech University Catholic Action (ZUCA) &nbsp;|&nbsp; Copyright ${currentYear}</p>
+        </td>
+      </tr>
+    `);
+  }
+
+  if (variant === 'alert') {
+    const alertType = data.alertType || 'warning';
+    let accent = '#f59e0b';
+    let badgeBg = '#fef3c7';
+    let badgeText = '#92400e';
+    let badgeLabel = 'Notice';
+
+    if (alertType === 'error') {
+      accent = '#dc2626';
+      badgeBg = '#fee2e2';
+      badgeText = '#991b1b';
+      badgeLabel = 'Action Required';
+    } else if (alertType === 'success') {
+      accent = '#059669';
+      badgeBg = '#d1fae5';
+      badgeText = '#065f46';
+      badgeLabel = 'Confirmed';
+    }
+
+    const button = actionUrl ? `
+      <tr>
+        <td style="padding: 0 28px 32px 28px; text-align: center;">
+          <a href="${actionUrl}" style="display: inline-block; background-color: #111111; color: #ffffff; text-decoration: none; padding: 13px 30px; border-radius: 4px; font-weight: 600; font-size: 14px;">${escapeHtml(buttonText || 'View Details')}</a>
+        </td>
+      </tr>
+    ` : '';
+
+    return outerTable(`
+      <tr>
+        <td style="padding: 24px 28px 16px 28px;">
+          <span style="display: inline-block; background-color: ${badgeBg}; color: ${badgeText}; font-size: 11px; font-weight: 700; letter-spacing: 1px; padding: 5px 12px; border-radius: 3px; text-transform: uppercase;">${badgeLabel}</span>
+        </td>
+      </tr>
+      <tr>
+        <td style="padding: 0 28px 8px 28px;">
+          <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0">
+            <tr>
+              <td style="width: 4px; background-color: ${accent}; border-radius: 2px;"></td>
+              <td style="padding-left: 16px;">
+                <h1 style="font-size: 20px; font-weight: 700; color: #111111; margin: 0 0 8px 0; line-height: 1.3;">${safeTitle}</h1>
+                <p style="font-size: 14px; color: #5a5a5a; margin: 0;">${safeGreeting}</p>
+              </td>
+            </tr>
+          </table>
+        </td>
+      </tr>
+      <tr>
+        <td style="padding: 16px 28px 8px 28px;">
+          <div style="font-size: 14px; color: #3a3a3a; line-height: 1.7;">${formatTextToHtml(body)}</div>
+        </td>
+      </tr>
+      ${button}
+      <tr>
+        <td style="background-color: #f7f7f7; padding: 16px 28px; text-align: center; border-top: 1px solid #ececec;">
+          <p style="font-size: 11px; color: #9a9a9a; margin: 0 0 4px 0;">Zetech University Catholic Action (ZUCA)</p>
+          <p style="font-size: 10px; color: #b5b5b5; margin: 0;">Automated notification. Do not reply.</p>
+        </td>
+      </tr>
+    `);
+  }
+
+  if (variant === 'media') {
+    const isLive = !!data.isLive;
+    const thumbnail = escapeHtml(data.thumbnail || '');
+    const videoTitle = escapeHtml(data.videoTitle || title || '');
+    const buttonColor = isLive ? '#dc2626' : '#111111';
+
+    const liveBadge = isLive
+      ? `<div style="margin-top: 12px;"><span style="display: inline-block; background-color: #dc2626; color: #ffffff; font-size: 11px; font-weight: 700; letter-spacing: 1px; padding: 5px 14px; border-radius: 3px; text-transform: uppercase;">Live Now</span></div>`
+      : '';
+
+    return outerTable(`
+      ${thumbnail ? `
+      <tr>
+        <td style="padding: 0;">
+          <img src="${thumbnail}" alt="${videoTitle}" width="600" style="display: block; width: 100%; max-width: 600px; height: auto; border: 0;">
+        </td>
+      </tr>
+      ` : ''}
+      <tr>
+        <td style="padding: 24px 28px 8px 28px;">
+          <div style="font-size: 11px; letter-spacing: 2px; text-transform: uppercase; color: #8a8a8a; margin-bottom: 10px;">${isLive ? 'Live Stream' : 'New Video'}</div>
+          <h1 style="font-size: 21px; font-weight: 700; color: #111111; margin: 0 0 10px 0; line-height: 1.3;">${videoTitle}</h1>
+          ${liveBadge}
+        </td>
+      </tr>
+      <tr>
+        <td style="padding: 12px 28px 8px 28px;">
+          <p style="font-size: 14px; color: #5a5a5a; margin: 0 0 14px 0;">${safeGreeting}</p>
+          <div style="font-size: 14px; color: #3a3a3a; line-height: 1.7;">${formatTextToHtml(body)}</div>
+        </td>
+      </tr>
+      <tr>
+        <td style="padding: 8px 28px 32px 28px; text-align: center;">
+          <a href="${actionUrl}" style="display: inline-block; background-color: ${buttonColor}; color: #ffffff; text-decoration: none; padding: 13px 30px; border-radius: 4px; font-weight: 600; font-size: 14px;">${escapeHtml(buttonText || 'Watch Now')}</a>
+        </td>
+      </tr>
+      <tr>
+        <td style="background-color: #f7f7f7; padding: 16px 28px; text-align: center; border-top: 1px solid #ececec;">
+          <p style="font-size: 11px; color: #9a9a9a; margin: 0;">Zetech University Catholic Action (ZUCA) &nbsp;|&nbsp; Copyright ${currentYear}</p>
+        </td>
+      </tr>
+    `);
+  }
+
+  const amountBlock = data.amount ? `
+    <tr>
+      <td style="padding: 0 28px 8px 28px;">
+        <div style="background-color: #f7f7f7; border: 1px solid #ececec; border-radius: 6px; padding: 18px; text-align: center;">
+          <div style="font-size: 11px; letter-spacing: 1px; text-transform: uppercase; color: #8a8a8a; margin-bottom: 6px;">Amount</div>
+          <div style="font-size: 26px; font-weight: 800; color: ${ZUCA_GREEN};">KES ${escapeHtml(data.amount.toLocaleString())}</div>
+        </div>
+      </td>
+    </tr>
+  ` : '';
+
+  const button = actionUrl ? `
+    <tr>
+      <td style="padding: 8px 28px 32px 28px; text-align: center;">
+        <a href="${actionUrl}" style="display: inline-block; background-color: ${ZUCA_GREEN}; color: #ffffff; text-decoration: none; padding: 13px 30px; border-radius: 4px; font-weight: 600; font-size: 14px;">${escapeHtml(buttonText || 'View Details')}</a>
+      </td>
+    </tr>
+  ` : '';
+
+  return outerTable(`
+    <tr>
+      <td style="background-color: ${ZUCA_GREEN}; padding: 24px 28px;">
+        <table role="presentation" cellpadding="0" cellspacing="0" border="0">
+          <tr>
+            <td style="padding-right: 14px;">
+              <img src="${ZUCA_LOGO_URL}" alt="ZUCA" width="48" height="48" style="display: block; width: 48px; height: 48px; border-radius: 50%; border: 0;">
+            </td>
+            <td>
+              <div style="font-size: 15px; font-weight: 700; color: #ffffff; line-height: 1.3;">Zetech University Catholic Action</div>
+              <div style="font-size: 11px; color: ${ZUCA_GOLD}; margin-top: 3px; letter-spacing: 1px; text-transform: uppercase;">Official Communication</div>
+            </td>
+          </tr>
+        </table>
+      </td>
+    </tr>
+    <tr>
+      <td style="height: 3px; background-color: ${ZUCA_GOLD}; font-size: 0; line-height: 0;">&nbsp;</td>
+    </tr>
+    <tr>
+      <td style="padding: 28px 28px 8px 28px;">
+        <h1 style="font-size: 20px; font-weight: 700; color: #111111; margin: 0 0 12px 0; line-height: 1.3;">${safeTitle}</h1>
+        <p style="font-size: 14px; color: #5a5a5a; margin: 0;">${safeGreeting}</p>
+      </td>
+    </tr>
+    <tr>
+      <td style="padding: 16px 28px 8px 28px;">
+        <div style="font-size: 14px; color: #3a3a3a; line-height: 1.7;">${formatTextToHtml(body)}</div>
+      </td>
+    </tr>
+    ${amountBlock}
+    ${button}
+    <tr>
+      <td style="background-color: #f7f7f7; padding: 18px 28px; text-align: center; border-top: 1px solid #ececec;">
+        <p style="font-size: 11px; color: #9a9a9a; margin: 0 0 4px 0;">Zetech University Catholic Action (ZUCA) &nbsp;|&nbsp; Copyright ${currentYear}</p>
+        <p style="font-size: 10px; color: #b5b5b5; margin: 0;">This is an automated message. Please do not reply directly to this email.</p>
+      </td>
+    </tr>
+  `);
 }
 
 async function sendWelcomeEmail(user, membershipNumber) {
@@ -262,13 +425,9 @@ async function sendWelcomeEmail(user, membershipNumber) {
       ? 'https://zetechcatholicaction.com'
       : 'https://zetechcatholic.vercel.app';
 
-    const htmlContent = renderEmailLayout({
-      variant: 'newsletter',
-      title: 'Membership Confirmed',
-      greeting: `${greeting}, ${firstName}.`,
-      body: `Thank you for registering with ZUCA. Your membership has been successfully created.
+    const body = `Thank you for registering with ZUCA. Your membership has been successfully created.
 
-Your official ZUCA membership number is ${membershipNumber}.
+**Membership Number: ${membershipNumber}**
 
 Please save this membership number. It is required for account verification and support inquiries. This number cannot be changed.
 
@@ -278,10 +437,17 @@ Available features include:
 - View announcements and mass programs
 - Make contributions and track pledges
 - Access community discussions
-- View event calendar and schedules`,
+- View event calendar and schedules`;
+
+    const htmlContent = renderEmailLayout({
+      variant: 'newsletter',
+      title: 'Membership Confirmed',
+      greeting: `${greeting}, ${firstName}.`,
+      body: body,
       actionUrl: `${frontendUrl}/dashboard`,
       buttonText: 'Access Dashboard',
-      data: { amount: null }
+      preheader: `Your ZUCA membership number is ${membershipNumber}.`,
+      data: {}
     });
 
     const textContent = `ZUCA MEMBERSHIP CONFIRMATION
@@ -320,8 +486,10 @@ async function sendVerificationEmail(user, verificationCode) {
     const htmlContent = renderEmailLayout({
       variant: 'security',
       title: 'Email Verification',
-      greeting: `${greeting}, ${firstName}. Please verify your email address using the code below.`,
-      data: { code: verificationCode }
+      greeting: `${greeting}, ${firstName}.`,
+      body: 'Use the code above to verify your email address. If you did not request this verification, please ignore this email.',
+      preheader: `Your ZUCA verification code is ${verificationCode}`,
+      data: { code: verificationCode, label: 'Verification code' }
     });
 
     const textContent = `ZUCA EMAIL VERIFICATION
@@ -351,8 +519,10 @@ async function sendPasswordResetEmail(email, resetCode) {
     const htmlContent = renderEmailLayout({
       variant: 'security',
       title: 'Password Reset',
-      greeting: `${greeting}. A request was received to reset your ZUCA account password. Use the code below to proceed.`,
-      data: { code: resetCode }
+      greeting: `${greeting}.`,
+      body: 'A request was received to reset your ZUCA account password. Use the code above to proceed. If you did not request a reset, ignore this email and your password will remain unchanged.',
+      preheader: `Your ZUCA password reset code is ${resetCode}`,
+      data: { code: resetCode, label: 'Password reset code' }
     });
 
     const textContent = `ZUCA PASSWORD RESET
@@ -387,10 +557,13 @@ async function sendPersonalizedEmailOriginal(user, notificationType, title, mess
         variant: 'receipt',
         title: 'Payment Receipt',
         greeting: '',
+        preheader: `Payment of KES ${(data.amount || 0).toLocaleString()} received. Receipt ${data.receiptNumber || ''}.`,
         data: {
           receiptNumber: data.receiptNumber || 'N/A',
           date: new Date().toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' }),
           senderName: data.payerName || 'N/A',
+          senderPhone: data.payerPhone || '',
+          jumuiaName: data.jumuiaName || '',
           campaignTitle: data.campaignTitle || data.campaign || 'Contribution',
           amount: (data.amount || 0).toLocaleString()
         }
@@ -418,6 +591,7 @@ This is an official receipt from Zetech University Catholic Action.`;
     let actionUrl = `${frontendUrl}/dashboard`;
     let buttonText = 'View Details';
     let variant = 'newsletter';
+    let preheader = title;
 
     const urlMap = {
       'announcement': '/announcements',
@@ -449,11 +623,18 @@ This is an official receipt from Zetech University Catholic Action.`;
     if (notificationType === 'attendance_missed' || notificationType === 'attendance_reminder' || notificationType === 'attendance_automatic_reminder') {
       variant = 'alert';
       buttonText = 'View Attendance History';
-      data.alertType = 'warning';
+      data.alertType = 'error';
+      preheader = `Attendance notice: ${title}`;
     } else if (notificationType === 'attendance_checkin' || notificationType === 'attendance_thankyou') {
       variant = 'alert';
       buttonText = 'View Attendance History';
       data.alertType = 'success';
+      preheader = `Check-in confirmed: ${title}`;
+    } else if (notificationType === 'attendance_sheet_opened') {
+      variant = 'alert';
+      buttonText = 'Open Attendance';
+      data.alertType = 'warning';
+      preheader = `Attendance is now open: ${title}`;
     }
 
     if (notificationType === 'youtube_new_video' || notificationType === 'youtube_live') {
@@ -469,6 +650,7 @@ This is an official receipt from Zetech University Catholic Action.`;
         body: message,
         actionUrl: videoUrl,
         buttonText: isLive ? 'Watch Live Now' : 'Watch on YouTube',
+        preheader: isLive ? `Live now: ${videoTitle}` : `New video: ${videoTitle}`,
         data: { thumbnail, videoTitle, isLive, videoId: data.videoId }
       });
 
@@ -497,6 +679,7 @@ ${currentDateTime}`;
       body: message,
       actionUrl: actionUrl,
       buttonText: buttonText,
+      preheader: preheader,
       data: data
     });
 
@@ -624,7 +807,7 @@ async function sendSemesterReportEmail(user, reportData, pdfBuffer, semester) {
       performanceMessage = 'Let us make next semester better. Set a goal to attend more meetings.';
     }
 
-    const bodyContent = `Your semester attendance report is ready for ${semester.title}.
+    const bodyContent = `Your semester attendance report is ready for **${semester.title}**.
 
 Semester Period: ${reportData.semester.period}
 
@@ -645,6 +828,7 @@ A detailed PDF report with all your meeting records is attached to this email.`;
       body: bodyContent,
       actionUrl: `${frontendUrl}/attendance/history`,
       buttonText: 'View Full History',
+      preheader: `Your ${semester.title} attendance rate is ${reportData.stats.attendanceRate}%`,
       data: { alertType }
     });
 
