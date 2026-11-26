@@ -599,9 +599,15 @@ function detectConversationVibe(messages, query) {
   
   // 9. ATTENDANCE Patterns
   const attendancePatterns = [
-    /\battendance\b|\bcheck\s*in\b|\bcheckin\b/i,
-    /\bmy\s+attendance\b|\battendance\s+records?\b/i,
-    /\battendance\s+sheet\b/i,
+    /\battendance\b|\bcheck\s*in\b|\bcheckin\b|\bcheck-in\b/i,
+    /\bmy\s+attendance\b|\battendance\s+records?\b|\battendance\s+history\b/i,
+    /\battendance\s+sheet\b|\battendance\s+summary\b|\battendance\s+rate\b/i,
+    /\bwas\s+i\s+(present|absent|late)\b/i,
+    /\bdid\s+i\s+(check\s*in|attend|come)\b/i,
+    /\bhow\s+many\s+(masses|mass|times|days|sundays)\s+(did\s+i|have\s+i)\b/i,
+    /\bmissed\s+(mass|church|any)\b/i,
+    /\bnilikuwa\s+(church|cani|misa)\b/i,
+    /\bnimekuja\s+(misa|church)\b/i,
   ];
   const isAttendanceQuestion = attendancePatterns.some(p => p.test(fullText));
   
@@ -616,6 +622,9 @@ function detectConversationVibe(messages, query) {
   if (isChill) scores.chill += 2;
   if (isEventQuestion) scores.event += 5;
   if (isAttendanceQuestion) scores.attendance += 4;
+  if (isAttendanceQuestion && /\b(this\s+month|last\s+month|this\s+week|last\s+week|this\s+year|last\s+sunday|yesterday|juzi|jana)\b/i.test(fullText)) {
+    scores.attendance += 2;
+  }
   if (isForceAnnouncement) scores.announcement = 10; // trigger announcement mode
   
   const recentJokes = recentMessages.filter(m => 
@@ -757,6 +766,43 @@ AI: [ACTION:get_announcements]{"limit":5}[/ACTION]
 **NOW OUTPUT THE ACTION IMMEDIATELY - NO OTHER TEXT BEFORE IT!**
 `;
   }
+
+
+    // ========== FORCE ATTENDANCE ACTION INSTRUCTION ==========
+  let forceAttendanceInstruction = '';
+  if (isAttendanceQuestion || vibe.vibe === 'attendance') {
+    forceAttendanceInstruction = `
+## IMMEDIATE ACTION REQUIRED - ATTENDANCE QUERY DETECTED
+
+The user is asking about attendance. You have NO attendance data in training.
+
+**YOU MUST OUTPUT ONE OF THESE ACTIONS FIRST:**
+
+For "my attendance / history / was I present / how many masses did I attend":
+[ACTION:get_my_attendance_records]{"limit":20}[/ACTION]
+
+For "my rate / summary / this month":
+[ACTION:get_attendance_summary]{"period":"month"}[/ACTION]
+
+For a specific date range ("last month", "this week"):
+[ACTION:get_attendance_by_date]{"startDate":"YYYY-MM-DD","endDate":"YYYY-MM-DD"}[/ACTION]
+
+For "check me in":
+[ACTION:check_in][/ACTION]
+
+**DO NOT:**
+- Say "I don't have access to your attendance"
+- Make up a percentage, a date, or a record
+- Respond with friendly text only
+
+**YOU MUST:**
+- Call the action FIRST
+- Then show the REAL data from the database
+- If the DB is empty, say: "I checked and you have no attendance records yet. You can check in at ${FRONTEND_URL}/member/attendance"
+
+**NOW OUTPUT THE ACTION IMMEDIATELY - NO OTHER TEXT BEFORE IT!**
+`;
+  }
   
   switch(vibe.vibe) {
     case 'funny':
@@ -847,6 +893,7 @@ You are **ZUCA AI** - the vibe-matching assistant for Zetech University Catholic
 
 ${forceEventInstruction}
 ${forceAnnouncementInstruction}
+${forceAttendanceInstruction}
 
 ${personality}
 
@@ -858,7 +905,7 @@ ${personality}
 - ${isCommand ? '✅ User wants to act → USE [ACTION]' : '❌ No command detected → Just chat'}
 - ${isGreeting ? '✅ User greeted → GREET BACK WARMLY' : '❌ No greeting → Respond naturally'}
 - ${isEventQuestion ? '📅 EVENT QUESTION DETECTED → USE get_upcoming_masses action!' : ''}
-- ${isAttendanceQuestion ? '📊 ATTENDANCE QUESTION DETECTED → USE get_my_attendance_records action!' : ''}
+- ${isAttendanceQuestion ? 'ATTENDANCE QUESTION DETECTED - MUST call get_my_attendance_records or get_attendance_summary!' : ''}
 - ${isForceEvent ? '🚨 FORCE EVENT MODE ACTIVATED - MUST CALL ACTION!' : ''}
 - ${isForceAnnouncement ? '📢 FORCE ANNOUNCEMENT MODE ACTIVATED - MUST CALL ACTION!' : ''}
 
@@ -967,12 +1014,12 @@ ${(conversationHistory || []).slice(-5).map(m => `${m.role}: ${m.content}`).join
 - list_schedules → [ACTION:list_schedules][/ACTION]
 - get_schedule_by_id → [ACTION:get_schedule_by_id]{"scheduleId":"id"}[/ACTION]
 
-### 📊 ATTENDANCE - 🚨 USE THESE FOR REAL ATTENDANCE! 🚨
+### ATTENDANCE - USE THESE FOR REAL ATTENDANCE
 - get_my_attendance_records → [ACTION:get_my_attendance_records]{"limit":20}[/ACTION]
+- get_attendance_summary → [ACTION:get_attendance_summary]{"period":"month"}[/ACTION]
+- get_attendance_by_date → [ACTION:get_attendance_by_date]{"startDate":"2026-11-01","endDate":"2026-11-30"}[/ACTION]
 - check_in → [ACTION:check_in][/ACTION]
-- get_attendance_sheet → [ACTION:get_attendance_sheet]{"date":"2026-08-27"}[/ACTION]
-- get_attendance_summary → [ACTION:get_attendance_summary][/ACTION]
-- get_attendance_by_date → [ACTION:get_attendance_by_date]{"startDate":"2026-08-01","endDate":"2026-08-31"}[/ACTION]
+- get_attendance_sheet → [ACTION:get_attendance_sheet]{"date":"2026-11-20"}[/ACTION]
 
 ### 🏠 JUMUIA
 - get_jumuia_list → [ACTION:get_jumuia_list][/ACTION]
@@ -1025,14 +1072,20 @@ ${(conversationHistory || []).slice(-5).map(m => `${m.role}: ${m.content}`).join
   → [ACTION:list_schedules][/ACTION]
 
 ### ATTENDANCE:
-- "my attendance", "attendance records", "attendance history"
-  → [ACTION:get_my_attendance_records][/ACTION]
-  
-- "check in", "checkin"
+- "my attendance", "attendance records", "attendance history", "was I present", "did I check in", "how many masses did I attend", "nilikuwa church", "nimekuja misa"
+  → [ACTION:get_my_attendance_records]{"limit":20}[/ACTION]
+
+- "my attendance rate", "attendance summary", "attendance this month"
+  → [ACTION:get_attendance_summary]{"period":"month"}[/ACTION]
+
+- "attendance last month", "attendance this week", "attendance between X and Y"
+  → [ACTION:get_attendance_by_date]{"startDate":"YYYY-MM-DD","endDate":"YYYY-MM-DD"}[/ACTION]
+
+- "check in", "checkin", "check me in"
   → [ACTION:check_in][/ACTION]
-  
-- "attendance sheet"
-  → [ACTION:get_attendance_sheet]{"date":"2026-08-27"}[/ACTION]
+
+- "attendance sheet", "who was present on <date>"
+  → [ACTION:get_attendance_sheet]{"date":"YYYY-MM-DD"}[/ACTION]
 
 ### HYMNS:
 - "hymn lyrics", "lyrics for", "get lyrics"
@@ -1157,6 +1210,7 @@ You: "Hey @Momma💫🥰! That's beautiful! 💖"
 - If they're joking → JOKE BACK
 - If they're asking about events → **FORCE ACTION get_upcoming_masses**
 - If they're asking about announcements → **FORCE ACTION get_announcements**
+- If they're asking about attendance → **FORCE ACTION get_my_attendance_records or get_attendance_summary**
 - If they're asking → ANSWER (use actions to get real data!)
 - If they're commanding → ACTION
 - If they're chilling → CHILL WITH THEM

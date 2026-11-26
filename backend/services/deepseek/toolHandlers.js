@@ -3039,6 +3039,323 @@ case "pin_message": {
   };
 }
 
+
+
+           // ==================== ATTENDANCE ====================
+      case "get_my_attendance_records":
+      case "my_attendance":
+      case "attendance_history":
+      case "show_my_attendance": {
+        if (!currentUser?.userId) {
+          return { error: "You need to be logged in to view attendance." };
+        }
+
+        const limit = Math.min(args.limit || 30, 50); // Increased to 30 for fuller report
+
+        const records = await prisma.attendanceEntry.findMany({
+          where: { userId: currentUser.userId },
+          include: {
+            sheet: {
+              select: { id: true, title: true, eventDate: true, location: true }
+            }
+          },
+          orderBy: { signTime: "desc" },
+          take: limit
+        });
+
+        if (records.length === 0) {
+          return {
+            message:
+              `📊 **YOUR ATTENDANCE REPORT**\n\n` +
+              `No attendance records found yet.\n\n` +
+              `You can check in here: ${FRONTEND_URL}/member/attendance\n` +
+              `View history: ${FRONTEND_URL}/member/attendance-history`,
+            records: [],
+            summary: { present: 0, absent: 0, late: 0, total: 0 }
+          };
+        }
+
+        // 1. Calculate Stats
+        let present = 0;
+        let absent = 0;
+        let late = 0;
+
+        for (const r of records) {
+          const s = (r.status || "PRESENT").toUpperCase();
+          if (s === "PRESENT") present++;
+          else if (s === "ABSENT") absent++;
+          else if (s === "LATE") late++;
+          else present++;
+        }
+        
+        const rate = Math.round((present / records.length) * 100);
+
+        // 2. Build the Report Message
+        let msg = `📊 **FULL ATTENDANCE REPORT**\n`;
+        msg += `===========================\n`;
+        msg += `✅ Present: ${present}\n`;
+        msg += `❌ Absent: ${absent}\n`;
+        msg += `⏰ Late: ${late}\n`;
+        msg += `📈 **Attendance Rate: ${rate}%**\n`;
+        msg += `===========================\n\n`;
+        msg += `📅 **RECENT HISTORY (Last ${records.length}):**\n\n`;
+
+        // List up to 15 records to keep the message readable
+        for (const r of records.slice(0, 15)) {
+          const date = r.sheet?.eventDate || r.signTime;
+          const dateStr = new Date(date).toLocaleDateString("en-KE", {
+            day: "numeric",
+            month: "short",
+            year: "numeric"
+          });
+          
+          const status = (r.status || "PRESENT").toUpperCase();
+          const emoji = status === "PRESENT" ? "✅" : status === "LATE" ? "⏰" : "❌";
+          const event = r.sheet?.title || "Event";
+          
+          msg += `${emoji} **${event}**\n`;
+          msg += `   📅 ${dateStr}\n`;
+          if (r.sheet?.location) {
+            msg += `   📍 ${r.sheet.location}\n`;
+          }
+          msg += `\n`;
+        }
+
+        if (records.length > 15) {
+          msg += `... and ${records.length - 15} more records.\n\n`;
+        }
+
+        msg += `===========================\n`;
+        msg += `📱 View your full history:\n${FRONTEND_URL}/member/attendance-history`;
+
+        return {
+          message: msg,
+          records: records.map(r => ({
+            id: r.id,
+            status: r.status,
+            date: r.sheet?.eventDate || r.signTime,
+            event: r.sheet?.title,
+            location: r.sheet?.location
+          })),
+          summary: { present, absent, late, total: records.length, rate }
+        };
+      }
+
+      case "get_attendance_summary":
+      case "attendance_rate":
+      case "my_attendance_rate": {
+        if (!currentUser?.userId) {
+          return { error: "You need to be logged in to view attendance." };
+        }
+
+        const now = new Date();
+        const period = args.period || "month";
+        let start;
+
+        if (period === "week") {
+          start = new Date(now);
+          start.setDate(now.getDate() - 7);
+        } else if (period === "year") {
+          start = new Date(now.getFullYear(), 0, 1);
+        } else {
+          start = new Date(now.getFullYear(), now.getMonth(), 1);
+        }
+
+        const records = await prisma.attendanceEntry.findMany({
+          where: {
+            userId: currentUser.userId,
+            signTime: { gte: start, lte: now }
+          }
+        });
+
+        const total = records.length;
+        const present = records.filter(r => (r.status || "PRESENT").toUpperCase() === "PRESENT").length;
+        const late = records.filter(r => (r.status || "").toUpperCase() === "LATE").length;
+        const absent = records.filter(r => (r.status || "").toUpperCase() === "ABSENT").length;
+        const rate = total ? Math.round((present / total) * 100) : 0;
+
+        const periodLabel = period === "week"
+          ? "this week"
+          : period === "year"
+            ? "this year"
+            : now.toLocaleString("en", { month: "long", year: "numeric" });
+
+        return {
+          message:
+            `YOUR ATTENDANCE - ${periodLabel}\n\n` +
+            `Present: ${present}\n` +
+            `Late: ${late}\n` +
+            `Absent: ${absent}\n` +
+            `Total: ${total}\n\n` +
+            `Attendance rate: ${rate}%\n\n` +
+            `Details: ${FRONTEND_URL}/member/attendance-history`,
+          summary: { present, late, absent, total, rate, period }
+        };
+      }
+
+      case "get_attendance_by_date":
+      case "attendance_range": {
+        if (!currentUser?.userId) {
+          return { error: "You need to be logged in to view attendance." };
+        }
+        if (!args.startDate || !args.endDate) {
+          return { error: "Please provide startDate and endDate (YYYY-MM-DD)." };
+        }
+
+        const start = new Date(args.startDate);
+        const end = new Date(args.endDate);
+        end.setHours(23, 59, 59, 999);
+
+        const records = await prisma.attendanceEntry.findMany({
+          where: {
+            userId: currentUser.userId,
+            signTime: { gte: start, lte: end }
+          },
+          include: { sheet: { select: { title: true, eventDate: true } } },
+          orderBy: { signTime: "asc" }
+        });
+
+        if (records.length === 0) {
+          return {
+            message: `No attendance records between ${args.startDate} and ${args.endDate}.`,
+            records: []
+          };
+        }
+
+        let msg = `ATTENDANCE: ${args.startDate} to ${args.endDate}\n\n`;
+
+        for (const r of records) {
+          const date = r.sheet?.eventDate || r.signTime;
+          const dateStr = new Date(date).toLocaleDateString("en-KE", {
+            day: "numeric",
+            month: "short"
+          });
+          const status = (r.status || "PRESENT").toUpperCase();
+          msg += `${dateStr} - ${r.sheet?.title || "Event"} - ${status}\n`;
+        }
+
+        return {
+          message: msg,
+          records: records.map(r => ({
+            date: r.sheet?.eventDate || r.signTime,
+            status: r.status,
+            event: r.sheet?.title
+          }))
+        };
+      }
+
+      case "check_in":
+      case "checkin":
+      case "mark_attendance": {
+        if (!currentUser?.userId) {
+          return { error: "You need to be logged in to check in." };
+        }
+
+        const today = new Date();
+        today.setHours(0, 0, 0, 0);
+        const tomorrow = new Date(today);
+        tomorrow.setDate(today.getDate() + 1);
+
+        const sheet = await prisma.attendanceSheet.findFirst({
+          where: {
+            eventDate: { gte: today, lt: tomorrow },
+            isOpen: true
+          }
+        });
+
+        if (!sheet) {
+          return {
+            message:
+              `No open attendance sheet for today.\n\n` +
+              `Ask the secretary to open one, or check the schedule:\n` +
+              `${FRONTEND_URL}/schedules`
+          };
+        }
+
+        const existing = await prisma.attendanceEntry.findFirst({
+          where: { userId: currentUser.userId, sheetId: sheet.id }
+        });
+
+        if (existing) {
+          return {
+            message:
+              `You already checked in for ${sheet.title || "today"}.\n` +
+              `Status: ${(existing.status || "PRESENT").toUpperCase()}\n` +
+              `Time: ${new Date(existing.signTime).toLocaleTimeString("en-KE")}`
+          };
+        }
+
+        const entry = await prisma.attendanceEntry.create({
+          data: {
+            userId: currentUser.userId,
+            sheetId: sheet.id,
+            status: "PRESENT",
+            signTime: new Date()
+          }
+        });
+
+        return {
+          success: true,
+          message:
+            `Check-in successful.\n\n` +
+            `Marked present for ${sheet.title || "today"}\n` +
+            `Time: ${new Date(entry.signTime).toLocaleTimeString("en-KE")}\n\n` +
+            `View history: ${FRONTEND_URL}/member/attendance-history`,
+          entry: { id: entry.id, status: entry.status, time: entry.signTime }
+        };
+      }
+
+      case "get_attendance_sheet":
+      case "attendance_sheet_for_date": {
+        const caller = await prisma.user.findUnique({ where: { id: currentUser.userId } });
+        const allowed = caller && (
+          caller.role === "admin" ||
+          caller.specialRole === "admin" ||
+          caller.specialRole === "secretary"
+        );
+
+        if (!allowed) {
+          return {
+            error: "Only admins and secretaries can view full attendance sheets. I can show your own attendance instead - try 'my attendance'."
+          };
+        }
+
+        if (!args.date) {
+          return { error: "Please provide a date (YYYY-MM-DD)." };
+        }
+
+        const day = new Date(args.date);
+        day.setHours(0, 0, 0, 0);
+        const next = new Date(day);
+        next.setDate(day.getDate() + 1);
+
+        const sheets = await prisma.attendanceSheet.findMany({
+          where: { eventDate: { gte: day, lt: next } },
+          include: {
+            entries: {
+              include: {
+                user: { select: { fullName: true, membership_number: true } }
+              }
+            }
+          }
+        });
+
+        if (sheets.length === 0) {
+          return { message: `No attendance sheet found for ${args.date}.` };
+        }
+
+        let msg = "";
+
+        for (const s of sheets) {
+          const present = s.entries.filter(e => (e.status || "PRESENT").toUpperCase() === "PRESENT").length;
+          const total = s.entries.length;
+          msg += `${s.title || args.date}\n`;
+          msg += `Location: ${s.location || "N/A"} | Present: ${present}/${total}\n\n`;
+        }
+
+        return { message: msg, sheets };
+      }
+
 // ==================== MEDIA ====================
 case "search_media": {
   const media = await prisma.media.findMany({

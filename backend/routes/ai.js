@@ -287,7 +287,16 @@ if (actionResult.totalRaised !== undefined || actionResult.totalPledges !== unde
     return actionResult.helpText;
   }
 
-  // Simple success message
+  // Direct message from tool handler (e.g. attendance, custom messages)
+  if (actionResult.message) {
+    // If the tool didn't explicitly set success, just return the message as-is
+    if (actionResult.success) {
+      return `✅ ${actionResult.message}`;
+    }
+    return actionResult.message;
+  }
+
+  // Simple success message fallback
   if (actionResult.success && actionResult.message) {
     return `✅ ${actionResult.message}`;
   }
