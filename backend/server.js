@@ -117,6 +117,138 @@ async function sendVerificationWhatsApp(phone, code, fullName) {
 }
 
 
+// ==================== RE-ENGAGEMENT REMINDERS ====================
+async function sendReengagementReminders({ limit = 10 } = {}) {
+  try {
+    console.log(`🔄 Re-engagement check — limit ${limit}/day`);
+
+    const THIRTY_DAYS_AGO = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000);
+
+    const inactiveUsers = await prisma.user.findMany({
+      where: {
+        lastActive: { lt: THIRTY_DAYS_AGO },
+        reengagementOptOut: false,
+        OR: [
+          { lastReengagementSent: null },
+          { lastReengagementSent: { lt: THIRTY_DAYS_AGO } },
+        ],
+      },
+      orderBy: { lastActive: 'asc' },
+      take: limit,
+      select: {
+        id: true,
+        fullName: true,
+        email: true,
+        phone: true,
+        lastActive: true,
+        createdAt: true,
+      },
+    });
+
+    if (inactiveUsers.length === 0) {
+      console.log('✅ No inactive users to remind.');
+      return { sent: 0, total: 0, results: [] };
+    }
+
+    console.log(`📢 Found ${inactiveUsers.length} inactive users`);
+
+   let sent = 0;
+const results = [];
+
+for (const user of inactiveUsers) {
+  const nameParts = (user.fullName || 'friend').trim().split(/\s+/);
+  const firstName = nameParts[0];
+  const lastName = nameParts.length > 1 ? nameParts[nameParts.length - 1] : '';
+
+  const daysSince = Math.floor(
+    (Date.now() - new Date(user.lastActive || user.createdAt).getTime()) /
+      (1000 * 60 * 60 * 24)
+  );
+
+  let emailSent;
+
+      let whatsappSent = false;
+
+      // EMAIL
+      if (user.email) {
+        try {
+          await sendReengagementEmail(user);
+          emailSent = true;
+          console.log(`✅ Email sent to ${user.email}`);
+        } catch (err) {
+          console.error(`❌ Email failed for ${user.email}:`, err.message);
+        }
+      }
+
+      // WHATSAPP
+      if (user.phone && waBot.isConnected) {
+        try {
+          const check = await waBot.isOnWhatsApp(user.phone);
+
+          if (!check.exists) {
+            console.log(
+              `⏭️ Skipping WhatsApp for ${firstName} — not on WhatsApp (${check.reason})`
+            );
+          } else {
+           const message = [
+  `Hi ${firstName} 👋, I hope you're doing well.`,
+  ``,
+  `I noticed it has been about ${daysSince} days since you last visited the ZUCA Portal.`,
+   `Having trouble logging in or forgot your password? Just reply to this message or reach out to any ZUCA leader  get you sorted right away.`,
+  ``,
+  `We would love to see you back. Here is what you have been missing:`,
+  `- Upcoming Wednesday 4:30 PM Mass updates, choir schedules, and practices (where we usually record attendance)`,
+  `- Announcements from the choir forum`,
+  `- New lyrics in the ZUCA Hymn Book, Prayer Book, and updates in the Gallery & Calendar`,
+  `- Maybe we even missed wishing you a happy birthday! Update your details at https://www.zetechcatholicaction.com/profile`,
+  ``,
+  `Log in here: https://www.zetechcatholicaction.com/login`,
+  ``,
+  `Anyway, don't get lost for too long ${lastName} keep checking in to see what's up 😊`,
+  ``,
+  `Nice times ahead,`,
+  `Regards,`,
+  `ZUCA LEADERSHIP FORUM`
+].join('\n');
+
+            await waBot.sendToUser(user.phone, message);
+            whatsappSent = true;
+            console.log(`✅ WhatsApp sent to ${user.phone}`);
+          }
+        } catch (err) {
+          console.error(`❌ WhatsApp failed for ${user.phone}:`, err.message);
+        }
+      }
+
+      if (emailSent || whatsappSent) {
+        await prisma.user.update({
+          where: { id: user.id },
+          data: { lastReengagementSent: new Date() },
+        });
+        sent++;
+      }
+
+      results.push({
+        userId: user.id,
+        name: user.fullName,
+        email: user.email,
+        phone: user.phone,
+        emailSent,
+        whatsappSent,
+      });
+
+      await new Promise((r) => setTimeout(r, 20000 + Math.random() * 20000));
+    }
+
+    console.log(`✅ Re-engagement done: ${sent}/${inactiveUsers.length} delivered`);
+
+    return { sent, total: inactiveUsers.length, results };
+  } catch (err) {
+    console.error('❌ Reengagement job error:', err);
+    return { sent: 0, total: 0, error: err.message };
+  }
+}
+
 // ================== ESCAPE HTML HELPER ==================
 function escapeHtml(text) {
   if (!text) return '';
@@ -288,7 +420,7 @@ const resetAttempts = new Map();
 const { sendEventReminders, sendCampaignReminders, checkNoAnnouncements } = require("./services/cronJobs");
 
 // ================== EMAIL ==================
-const { sendPasswordResetEmail, sendPersonalizedEmail, sendWelcomeEmail, sendVerificationEmail } = require("./services/mailer");
+const { sendPasswordResetEmail, sendPersonalizedEmail, sendWelcomeEmail, sendVerificationEmail, sendReengagementEmail } = require("./services/mailer");
 // ================== NOTIFICATIONS ==================
 const notifications = new Map();
 const pendingRegistrations = new Map();
@@ -2204,6 +2336,17 @@ app.post("/api/cron/check", async (req, res) => {
       executed.push("announcement_check");
     }
 
+    // ========== RE-ENGAGEMENT REMINDERS - Daily at 10 AM EAT (7 AM UTC) ==========
+    if (hour === 7 && minute < 5) {
+      console.log("📢 Running reengagement reminders...");
+      try {
+        await sendReengagementReminders({ limit: 10 });
+        executed.push("reengagement");
+      } catch (err) {
+        console.error("Reengagement failed:", err.message);
+      }
+    }
+
      if (hour === 23 && minute >= 59) {
       console.log("📊 Sending 24-hour system report...");
       await send24HourReport();
@@ -2235,6 +2378,119 @@ app.post("/api/admin/reports/trigger-24h", authenticate, requireAdmin, async (re
     }
   } catch (err) {
     console.error("Report trigger error:", err);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+
+// ==================== TEST REENGAGEMENT FOR ONE USER ====================
+app.post('/api/admin/test-reengagement-single', authenticate, requireAdmin, async (req, res) => {
+  try {
+    const { email } = req.body;
+    if (!email) {
+      return res.status(400).json({ error: 'email is required in body' });
+    }
+
+    const user = await prisma.user.findUnique({
+      where: { email: email.toLowerCase() },
+      select: {
+        id: true,
+        fullName: true,
+        email: true,
+        phone: true,
+        lastActive: true,
+        createdAt: true,
+      },
+    });
+
+    if (!user) {
+      return res.status(404).json({ error: 'User not found' });
+    }
+
+    const firstName = (user.fullName || 'friend').split(' ')[0];
+    const daysSince = Math.floor(
+      (Date.now() - new Date(user.lastActive || user.createdAt).getTime()) /
+        (1000 * 60 * 60 * 24)
+    );
+
+    let emailSent = false;
+    let whatsappSent = false;
+    let whatsappReason = null;
+
+    // EMAIL
+    if (user.email) {
+      try {
+        await sendReengagementEmail(user);
+        emailSent = true;
+        console.log(`✅ Test email sent to ${user.email}`);
+      } catch (err) {
+        console.error(`❌ Email failed for ${user.email}:`, err.message);
+      }
+    }
+
+    // WHATSAPP
+    if (user.phone && waBot.isConnected) {
+      try {
+        const check = await waBot.isOnWhatsApp(user.phone);
+        if (!check.exists) {
+          whatsappReason = check.reason || 'not_on_whatsapp';
+          console.log(`⏭️ Skipping WhatsApp — ${whatsappReason}`);
+        } else {
+          const nameParts = (user.fullName || 'friend').trim().split(/\s+/);
+          const lastName = nameParts.length > 1 ? nameParts[nameParts.length - 1] : '';
+            
+
+         const message = [
+  `Hi ${firstName} 👋, I hope you're doing well.`,
+  ``,
+  `I noticed it has been about ${daysSince} days since you last visited the ZUCA Portal.`,
+   `Having trouble logging in or forgot your password? Just reply to this message or reach out to any ZUCA leader  get you sorted right away.`,
+  ``,
+  `We would love to see you back. Here is what you have been missing:`,
+  `- Upcoming Wednesday 4:30 PM Mass updates, choir schedules, and practices (where we usually record attendance)`,
+  `- Announcements from the choir forum`,
+  `- New lyrics in the ZUCA Hymn Book, Prayer Book, and updates in the Gallery & Calendar`,
+  `- Maybe we even missed wishing you a happy birthday! Update your details at https://www.zetechcatholicaction.com/profile`,
+  ``,
+  `Log in here: https://www.zetechcatholicaction.com/login`,
+  ``,
+  `Anyway, don't get lost for too long ${lastName} keep checking in to see what's up 😊`,
+  ``,
+  `Nice times ahead,`,
+  `Regards,`,
+  `ZUCA LEADERSHIP FORUM`
+].join('\n');
+
+
+          await waBot.sendToUser(user.phone, message);
+          whatsappSent = true;
+          console.log(`✅ Test WhatsApp sent to ${user.phone}`);
+        }
+      } catch (err) {
+        whatsappReason = err.message;
+        console.error(`❌ WhatsApp failed for ${user.phone}:`, err.message);
+      }
+    } else if (!user.phone) {
+      whatsappReason = 'no_phone_on_account';
+    } else if (!waBot.isConnected) {
+      whatsappReason = 'bot_not_connected';
+    }
+
+    res.json({
+      success: true,
+      user: {
+        id: user.id,
+        name: user.fullName,
+        email: user.email,
+        phone: user.phone,
+        daysSince: daysSince,
+      },
+      emailSent,
+      whatsappSent,
+      whatsappReason,
+    });
+  } catch (err) {
+    console.error('Test single reengagement error:', err);
     res.status(500).json({ error: err.message });
   }
 });

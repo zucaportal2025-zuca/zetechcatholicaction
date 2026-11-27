@@ -1827,6 +1827,36 @@ async removeActiveGroup(groupId) {
     const groups = await this.getGroups();
     return groups.some(g => g.id === groupId);
   }
+    // =============================================
+  // ✅ CHECK IF A NUMBER IS ON WHATSAPP
+  // =============================================
+  async isOnWhatsApp(phoneNumber) {
+    if (!this.sock || !this.isConnected) {
+      return { exists: false, reason: 'bot_not_connected' };
+    }
+
+    try {
+      let cleanNumber = String(phoneNumber).replace(/[^0-9]/g, '');
+      if (cleanNumber.startsWith('0')) {
+        cleanNumber = '254' + cleanNumber.substring(1);
+      } else if (!cleanNumber.startsWith('254') && cleanNumber.length === 10) {
+        cleanNumber = '254' + cleanNumber;
+      } else if (!cleanNumber.startsWith('254')) {
+        cleanNumber = '254' + cleanNumber;
+      }
+
+      const [result] = await this.sock.onWhatsApp(`${cleanNumber}@s.whatsapp.net`);
+      if (result && result.exists) {
+        return { exists: true, jid: result.jid, number: cleanNumber };
+      }
+      return { exists: false, reason: 'not_on_whatsapp', number: cleanNumber };
+    } catch (err) {
+      console.error('isOnWhatsApp error:', err.message);
+      return { exists: false, reason: err.message };
+    }
+  }
+
+
 
     async getProfilePicture(jid) {
     try {

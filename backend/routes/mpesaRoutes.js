@@ -1,7 +1,7 @@
 const express = require("express");
 const router = express.Router();
 const bcrypt = require("bcryptjs");
-const mpesaService = require("../services/mpesaService");
+const mpesaService = require("../services/megaPayService");
 const { PrismaClient } = require("@prisma/client");
 const prisma = new PrismaClient();
 const jwt = require("jsonwebtoken");
@@ -184,18 +184,37 @@ router.post("/stk-push", async (req, res) => {
     console.error("STK Push error:", err);
     res.status(500).json({ error: err.message });
   }
-});// 3. M-PESA Callback URL (webhook)
+});
+// 3. M-PESA Callback URL (webhook)
 router.post("/callback", async (req, res) => {
   try {
     console.log("M-PESA Callback received:", JSON.stringify(req.body, null, 2));
     
-    const { Body } = req.body;
-    if (!Body) {
-      return res.status(200).json({ ResultCode: 0, ResultDesc: "No body" });
+    // ---- Detect callback format (Daraja vs MegaPay) ----
+    let ResultCode, ResultDesc, CheckoutRequestID, CallbackMetadata;
+
+    if (req.body.Body && req.body.Body.stkCallback) {
+      // Daraja nested format
+      const { stkCallback } = req.body.Body;
+      ResultCode = stkCallback.ResultCode;
+      ResultDesc = stkCallback.ResultDesc;
+      CheckoutRequestID = stkCallback.CheckoutRequestID;
+      CallbackMetadata = stkCallback.CallbackMetadata;
+    } else if (req.body.TransactionID !== undefined) {
+      // MegaPay flat format — normalize into Daraja shape
+      ResultCode = req.body.ResponseCode;
+      ResultDesc = req.body.ResponseDescription;
+      CheckoutRequestID = req.body.TransactionID;
+      CallbackMetadata = {
+        Item: [
+          { Name: "MpesaReceiptNumber", Value: req.body.TransactionReceipt },
+          { Name: "Amount",             Value: req.body.TransactionAmount },
+          { Name: "PhoneNumber",        Value: req.body.Msisdn },
+        ].filter((i) => i.Value !== undefined && i.Value !== null),
+      };
+    } else {
+      return res.status(200).json({ ResultCode: 0, ResultDesc: "Unknown payload" });
     }
-    
-    const { stkCallback } = Body;
-    const { ResultCode, ResultDesc, CheckoutRequestID, CallbackMetadata } = stkCallback;
     
     // Find payment - NO pledge, include user and contributionType directly
     const payment = await prisma.payment.findFirst({
@@ -210,8 +229,14 @@ router.post("/callback", async (req, res) => {
       }
     });
     
-    if (!payment) {
+       if (!payment) {
       console.log("Payment not found for CheckoutRequestID:", CheckoutRequestID);
+      return res.status(200).json({ ResultCode: 0, ResultDesc: "OK" });
+    }
+
+    // Idempotency: skip if already processed
+    if (payment.status === "SUCCESS" || payment.status === "FAILED") {
+      console.log("⏭️ Payment already processed, skipping:", payment.id);
       return res.status(200).json({ ResultCode: 0, ResultDesc: "OK" });
     }
 
@@ -225,7 +250,7 @@ console.log("User Jumuia:", payment.user?.jumuiaId);
     const campaign = payment.contributionType;
     const payer = payment.user;
     
-    if (ResultCode === 0) {
+    if (Number(ResultCode) === 0) {
       let mpesaReceiptNumber = "";
       let amount = payment.amount;
       

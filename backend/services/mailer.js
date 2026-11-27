@@ -55,9 +55,21 @@ async function sendViaBrevo(to, subject, htmlContent, textContent, fromName = "Z
     sendSmtpEmail.htmlContent = htmlContent;
     sendSmtpEmail.textContent = textContent || "";
 
+    console.log(`[BREVO] Attempting send → to=${to}, from=${sendSmtpEmail.sender.email}, subject="${subject}"`);
+
     const response = await brevoApi.sendTransacEmail(sendSmtpEmail);
+
+    console.log(`[BREVO] ✅ Accepted:`, JSON.stringify(response));
     return true;
   } catch (error) {
+    console.error(`[BREVO] ❌ FAILED for ${to}`);
+    console.error(`[BREVO] Error message:`, error.message);
+    if (error.response && error.response.body) {
+      console.error(`[BREVO] Error body:`, JSON.stringify(error.response.body));
+    }
+    if (error.response && error.response.statusCode) {
+      console.error(`[BREVO] Status code:`, error.response.statusCode);
+    }
     return false;
   }
 }
@@ -937,6 +949,72 @@ ${currentDateTime}`;
   }
 }
 
+// ================== RE-ENGAGEMENT EMAIL ==================
+async function sendReengagementEmail(user) {
+  try {
+    const nameParts = (user.fullName || 'Member').trim().split(/\s+/);
+    const firstName = nameParts[0] || 'Member';
+    const lastName = nameParts.length > 1 ? nameParts[nameParts.length - 1] : firstName;
+
+    const daysSince = Math.floor(
+      (Date.now() - new Date(user.lastActive || user.createdAt).getTime()) /
+        (1000 * 60 * 60 * 24)
+    );
+
+    const frontendUrl = process.env.NODE_ENV === 'production'
+      ? 'https://www.zetechcatholicaction.com'
+      : 'https://zetechcatholic.vercel.app';
+
+    const message = [
+      `Hi ${firstName} 👋, I hope you're doing well.`,
+      ``,
+      `I noticed it has been about ${daysSince} days since you last visited the ZUCA Portal.`,
+      `Having trouble logging in or forgot your password? Just reply to this message or reach out to any ZUCA leader to get you sorted right away.`,
+      ``,
+      `We would love to see you back. Here is what you have been missing:`,
+      `- Upcoming Wednesday 4:30 PM Mass updates, choir schedules, and practices (where we usually record attendance)`,
+      `- Announcements from the choir forum`,
+      `- New lyrics in the ZUCA Hymn Book, Prayer Book, and updates in the Gallery & Calendar`,
+      `- Maybe we even missed wishing you a happy birthday! Update your details at ${frontendUrl}/profile`,
+      ``,
+      `Log in here: ${frontendUrl}/login`,
+      ``,
+      `Anyway, don't get lost for too long ${lastName}, keep checking in to see what's up 😊`,
+      ``,
+      `Nice times ahead,`,
+      `Regards,`,
+      `ZUCA LEADERSHIP FORUM`
+    ].join('\n');
+
+    const htmlContent = renderEmailLayout({
+      variant: 'newsletter',
+      title: 'We Miss You at ZUCA Portal',
+      greeting: '', // Left blank because your message already opens with "Hi ${firstName}"
+      body: message,
+      actionUrl: `${frontendUrl}/login`,
+      buttonText: 'Open ZUCA Portal',
+      preheader: `It has been about ${daysSince} days since your last visit to ZUCA Portal.`,
+      data: {}
+    });
+
+    const textContent = message;
+
+    await sendViaBrevo(
+      user.email,
+      `${firstName}, we miss you at ZUCA Portal`,
+      htmlContent,
+      textContent,
+      'ZUCA'
+    );
+
+    return true;
+  } catch (error) {
+    console.error('sendReengagementEmail error:', error.message);
+    return false;
+  }
+}
+
+
 function getTimeBasedGreeting() { return getFormalGreeting(); }
 function getCurrentTime() { return getCurrentDateTime(); }
 function getNotificationEmoji() { return ''; }
@@ -949,6 +1027,7 @@ module.exports = {
   sendBulkEmails,
   sendSms,
   sendSemesterReportEmail,
+  sendReengagementEmail,
   getTimeBasedGreeting,
   getCurrentTime,
   getNotificationEmoji,

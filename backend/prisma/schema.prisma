@@ -50,6 +50,10 @@ model User {
 birthdayAdvertId    Int?     @unique  
 
 
+  lastReengagementSent DateTime?
+  reengagementOptOut   Boolean   @default(false)
+
+
 
 
 // Relations
