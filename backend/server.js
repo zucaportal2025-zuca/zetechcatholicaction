@@ -47,7 +47,9 @@ async function getNextAvailableMembershipNumber() {
       return 'Z#001';
     }
 
+    // Skip any users whose membership_number is null/empty
     const usedNumbers = users
+      .filter(u => u.membership_number && typeof u.membership_number === 'string')
       .map(u => parseInt(u.membership_number.replace('Z#', '')))
       .filter(num => !isNaN(num))
       .sort((a, b) => a - b);
@@ -63,11 +65,22 @@ async function getNextAvailableMembershipNumber() {
     return `Z#${expected.toString().padStart(3, '0')}`;
   } catch (error) {
     console.error("Error finding next number:", error);
-    const maxUser = await prisma.user.findFirst({
-      orderBy: { membership_number: 'desc' }
-    });
-    const maxNum = maxUser ? parseInt(maxUser.membership_number.replace('Z#', '')) : 0;
-    return `Z#${(maxNum + 1).toString().padStart(3, '0')}`;
+    try {
+      // Only consider users with a non-null membership_number
+      const maxUser = await prisma.user.findFirst({
+        where: { membership_number: { not: null } },
+        orderBy: { membership_number: 'desc' }
+      });
+      if (!maxUser || !maxUser.membership_number) {
+        return 'Z#001';
+      }
+      const maxNum = parseInt(maxUser.membership_number.replace('Z#', ''));
+      return `Z#${(isNaN(maxNum) ? 1 : maxNum + 1).toString().padStart(3, '0')}`;
+    } catch (fallbackError) {
+      console.error("Fallback membership number also failed:", fallbackError);
+      // Last resort — timestamp-based, guaranteed unique
+      return `Z#T${Date.now().toString().slice(-5)}`;
+    }
   }
 }
 
@@ -76,6 +89,32 @@ async function getNextAvailableMembershipNumber() {
 
 const jwt = require("jsonwebtoken");
 const JWT_SECRET = process.env.JWT_SECRET || "zuca_super_secret_key";
+
+
+
+
+// ================== DUAL-CHANNEL VERIFICATION HELPER ==================
+const waBot = require("./services/whatsapp.bot");
+
+async function sendVerificationWhatsApp(phone, code, fullName) {
+  try {
+    if (!phone) return { sent: false, reason: "no_phone" };
+    if (!waBot.isConnected) return { sent: false, reason: "bot_not_connected" };
+
+    const text =
+      `*ZUCA Verification Code*\n\n` +
+      `Hi ${fullName || "there"},\n\n` +
+      `Your verification code is: *${code}*\n\n` +
+      `Expires in 15 minutes. If you didn't request this, ignore this message.`;
+
+    await waBot.sendToUser(phone, text);
+    console.log(`✅ Verification WhatsApp sent to ${phone}`);
+    return { sent: true };
+  } catch (err) {
+    console.error(`❌ Verification WhatsApp failed for ${phone}:`, err.message);
+    return { sent: false, reason: err.message };
+  }
+}
 
 
 // ================== ESCAPE HTML HELPER ==================
@@ -7007,7 +7046,15 @@ app.post("/api/auth/request", async (req, res) => {
     });
 
     await sendPasswordResetEmail(user.email, resetCode);
-    res.json({ message: "Reset code sent! Check your inbox." });
+
+    sendVerificationWhatsApp(user.phone, resetCode, user.fullName).catch((err) =>
+      console.error("WhatsApp reset send failed:", err.message)
+    );
+
+    res.json({
+      message: "Reset code sent! Check your email and WhatsApp.",
+      email: user.email,
+    });
 
   } catch (err) {
     console.error("Forgot Password Error:", err);
@@ -7106,18 +7153,22 @@ app.post("/api/register", async (req, res) => {
     }, 15 * 60 * 1000);
     console.log("🔵 STEP 7: Cleanup timer set");
 
-    console.log("🔵 STEP 8: About to fire email (async)");
+    console.log("🔵 STEP 8: Firing email + WhatsApp in parallel (fire-and-forget)");
     (async () => {
-      try {
-        console.log(`📧 Sending email to ${normalizedEmail}`);
-        const tempUser = { email: normalizedEmail, fullName: fullName };
-        await sendVerificationEmail(tempUser, verificationCode);
-        console.log(`✅ Verification email sent to ${normalizedEmail}`);
-      } catch (err) {
-        console.error(`❌ Verification email failed:`, err.message);
-      }
+      const tempUser = { email: normalizedEmail, fullName };
+      const [emailResult, waResult] = await Promise.allSettled([
+        sendVerificationEmail(tempUser, verificationCode),
+        sendVerificationWhatsApp(formattedPhone, verificationCode, fullName),
+      ]);
+      const emailOk = emailResult.status === "fulfilled";
+      const waOk = waResult.status === "fulfilled" && waResult.value?.sent;
+      console.log(
+        `📤 Verification code — email: ${emailOk ? "✅" : "❌"}, whatsapp: ${waOk ? "✅" : "❌"}`
+      );
+      if (!emailOk) console.error(`❌ Email failed:`, emailResult.reason?.message);
+      if (!waOk) console.error(`❌ WhatsApp failed:`, waResult.reason?.message || waResult.value?.reason);
     })();
-    console.log("🔵 STEP 9: Email fire-and-forget triggered");
+    console.log("🔵 STEP 9: Parallel delivery triggered");
 
     console.log("🔵 STEP 10: About to send response");
     res.json({
@@ -7575,12 +7626,16 @@ app.post("/api/auth/request-reset", async (req, res) => {
       data: { resetCode, resetCodeExpiry }
     });
     
-    // Send email with reset code
+    // Email — required, blocks the response
     await sendPasswordResetEmail(user.email, resetCode);
+
+    // WhatsApp — best effort, fire-and-forget
+    sendVerificationWhatsApp(user.phone, resetCode, user.fullName)
+      .catch(err => console.error("WhatsApp reset send failed:", err.message));
     
     res.json({ 
       success: true,
-      message: "Reset code sent to your email",
+      message: "Reset code sent to your email and WhatsApp",
       email: user.email
     });
     
@@ -7666,10 +7721,14 @@ app.post("/api/auth/resend-code", async (req, res) => {
     });
     
     await sendPasswordResetEmail(user.email, resetCode);
+
+    sendVerificationWhatsApp(user.phone, resetCode, user.fullName).catch((err) =>
+      console.error("WhatsApp resend failed:", err.message)
+    );
     
     res.json({ 
       success: true,
-      message: "New code sent to your email" 
+      message: "New code sent to your email and WhatsApp" 
     });
     
   } catch (err) {
