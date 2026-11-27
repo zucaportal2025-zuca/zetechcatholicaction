@@ -15878,32 +15878,33 @@ app.post("/api/ai/assistant", authenticate, async (req, res) => {
 
 // ================== PROFILE SETTINGS ENDPOINTS ==================
 
-// Update user profile (full name, email, phone, password)
+// Update user profile (full name, email, phone, admissionNumber, password)
 app.put("/api/users/profile", authenticate, async (req, res) => {
   try {
     const userId = req.user.userId;
-    const { 
-      fullName, 
-      email, 
-      phone, 
+    const {
+      fullName,
+      email,
+      phone,
+      admissionNumber,
       currentPassword,
-      newPassword 
+      newPassword,
     } = req.body;
 
     // Get current user
-    const user = await prisma.user.findUnique({ 
+    const user = await prisma.user.findUnique({
       where: { id: userId },
-      include: { homeJumuia: true }
+      include: { homeJumuia: true },
     });
-    
+
     if (!user) {
       return res.status(404).json({ error: "User not found" });
     }
 
     // Check if email is already taken by another user
-    if (email && email !== user.email) {
+    if (email && email.toLowerCase() !== user.email) {
       const existingUser = await prisma.user.findUnique({
-        where: { email: email.toLowerCase() }
+        where: { email: email.toLowerCase() },
       });
       if (existingUser && existingUser.id !== userId) {
         return res.status(400).json({ error: "Email already in use" });
@@ -15913,7 +15914,7 @@ app.put("/api/users/profile", authenticate, async (req, res) => {
     // Check if phone is already taken by another user
     if (phone && phone !== user.phone) {
       const existingUser = await prisma.user.findFirst({
-        where: { phone: phone }
+        where: { phone },
       });
       if (existingUser && existingUser.id !== userId) {
         return res.status(400).json({ error: "Phone number already in use" });
@@ -15922,24 +15923,42 @@ app.put("/api/users/profile", authenticate, async (req, res) => {
 
     // Prepare update data
     const updateData = {
-      fullName: fullName || user.fullName,
-      email: email ? email.toLowerCase() : user.email,
-      phone: phone || user.phone,
-      
+      fullName: fullName?.trim() || user.fullName,
+      email: email ? email.toLowerCase().trim() : user.email,
+      phone: phone !== undefined ? phone.trim() : user.phone,
     };
+
+    // admission number — trim, uppercase, allow null
+    if (admissionNumber !== undefined) {
+      const clean = admissionNumber.trim();
+      updateData.admissionNumber = clean.length ? clean.toUpperCase() : null;
+    }
 
     // Handle password change if requested
     if (newPassword) {
       if (!currentPassword) {
-        return res.status(400).json({ error: "Current password is required to change password" });
+        return res
+          .status(400)
+          .json({ error: "Current password is required to change password" });
       }
-      
+
+      if (newPassword === currentPassword) {
+        return res.status(400).json({
+          error: "New password must be different from current password",
+        });
+      }
+
       // Verify current password
-      const isValidPassword = await bcrypt.compare(currentPassword, user.password);
+      const isValidPassword = await bcrypt.compare(
+        currentPassword,
+        user.password
+      );
       if (!isValidPassword) {
-        return res.status(400).json({ error: "Current password is incorrect" });
+        return res
+          .status(400)
+          .json({ error: "Current password is incorrect" });
       }
-      
+
       // Hash new password
       updateData.password = await bcrypt.hash(newPassword, 10);
     }
@@ -15953,21 +15972,25 @@ app.put("/api/users/profile", authenticate, async (req, res) => {
         fullName: true,
         email: true,
         phone: true,
+        admissionNumber: true,
         role: true,
+        specialRole: true,
         membership_number: true,
         profileImage: true,
+        coverImage: true,
+        
         homeJumuia: true,
         createdAt: true,
-        
-      }
+      },
     });
 
-    res.json({ 
-      success: true, 
-      message: "Profile updated successfully",
-      user: updatedUser 
+    res.json({
+      success: true,
+      message: newPassword
+        ? "Password updated successfully"
+        : "Profile updated successfully",
+      user: updatedUser,
     });
-    
   } catch (err) {
     console.error("Profile update error:", err);
     res.status(500).json({ error: err.message });
